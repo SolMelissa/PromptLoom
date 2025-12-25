@@ -72,6 +72,9 @@
             </Setter>
         </Style>
 
+        <Style x:Key="IconBtn" TargetType="Button" BasedOn="{StaticResource IconBtnBase}"/>
+        <Style x:Key="IconToggleBtn" TargetType="ToggleButton" BasedOn="{StaticResource IconBtnBase}"/>
+
         <!-- Consistent icon container -->
         <Style x:Key="IconPath" TargetType="Path">
             <Setter Property="Width" Value="14"/>
@@ -198,7 +201,7 @@
                                                         ToolTip="Select none"
                                                         Command="{Binding DataContext.SelectNoneSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/></Button>
-	                                                <ToggleButton Style="{StaticResource IconBtn}"
+	                                                <ToggleButton Style="{StaticResource IconToggleBtn}"
 	                                                             ToolTip="Lock category (exclude from randomization)"
 	                                                             IsChecked="{Binding IsLocked}" Content="🔒"/>
 	                                                <Button Style="{StaticResource IconBtn}"
@@ -244,7 +247,7 @@
                                                                             ToolTip="Move subcategory down"
                                                                             Command="{Binding DataContext.MoveSubCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/></Button>
-	                                                                    <ToggleButton Style="{StaticResource IconBtn}"
+	                                                                    <ToggleButton Style="{StaticResource IconToggleBtn}"
 	                                                                                 ToolTip="Lock subcategory (exclude from randomization)"
 	                                                                                 IsChecked="{Binding IsLocked}" Content="🔒"/>
 	                                                                    <Button Style="{StaticResource IconBtn}"
@@ -923,7 +926,7 @@
 	                                                                    Command="{Binding DataContext.SelectAllSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectAll}"/></Button>
 														<Button Style="{StaticResource IconBtn}"  ToolTip="Select no subcategories"
 														        Command="{Binding DataContext.SelectNoneSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/></Button>
-														<ToggleButton Style="{StaticResource IconBtn}" ToolTip="Lock category (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="🔒"/>
+														<ToggleButton Style="{StaticResource IconToggleBtn}" ToolTip="Lock category (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="🔒"/>
 														<Button Style="{StaticResource IconBtn}" ToolTip="Randomize this category" Command="{Binding DataContext.RandomizeCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="🎲"/>
 	</UniformGrid>
 	                                                    </DockPanel>
@@ -940,7 +943,7 @@
 	                                                                                        Command="{Binding DataContext.MoveSubCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/></Button>
 																						<Button Style="{StaticResource IconBtn}"  ToolTip="Move subcategory down"
 																						        Command="{Binding DataContext.MoveSubCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/></Button>
-																						<ToggleButton Style="{StaticResource IconBtn}" ToolTip="Lock subcategory (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="🔒"/>
+																						<ToggleButton Style="{StaticResource IconToggleBtn}" ToolTip="Lock subcategory (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="🔒"/>
 																						<Button Style="{StaticResource IconBtn}" ToolTip="Randomize this subcategory" Command="{Binding DataContext.RandomizeSubCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="🎲"/>
 </UniformGrid>
 	                                                                            <Button CommandParameter="{Binding}" Command="{Binding DataContext.SelectSubCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="{Binding Name}" Background="Transparent" BorderThickness="0" Padding="6,2" HorizontalAlignment="Left"/></DockPanel>
