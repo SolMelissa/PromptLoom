@@ -1383,12 +1383,15 @@
 	                        </Grid.ColumnDefinitions>
 
 	                        <!-- Panel 1: prompt (wrap to two lines) -->
-	                        <Button Grid.Column="0" Background="Transparent" BorderThickness="0" Padding="0"
-	                                Command="{Binding ToggleOverlayDetailsCommand}">
-	                            <TextBlock Foreground="#FFF" FontSize="13" TextWrapping="Wrap" MaxLines="2"
-	                                       TextTrimming="CharacterEllipsis"
-	                                       Text="{Binding OverlaySelectedItem.PromptShort}"/>
-	                        </Button>
+                                <Button Grid.Column="0" Background="Transparent" BorderThickness="0" Padding="0"
+                                        Command="{Binding ToggleOverlayDetailsCommand}">
+                                    <!-- WPF TextBlock lacks MaxLines; cap at ~2 lines via line height/max height. -->
+                                    <TextBlock Foreground="#FFF" FontSize="13" TextWrapping="Wrap"
+                                               LineStackingStrategy="BlockLineHeight" LineHeight="16" MaxHeight="32"
+                                               TextTrimming="CharacterEllipsis"
+                                               Text="{Binding OverlaySelectedItem.PromptShort}"
+                                               ToolTip="{Binding OverlaySelectedItem.Prompt}"/>
+                                </Button>
 
 	                        <!-- Panel 2: model / steps / cfg -->
 	                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
