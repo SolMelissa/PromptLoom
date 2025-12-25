@@ -1,0 +1,12 @@
+softbox lighting
+rim light
+neon glow
+window light
+dramatic shadows
+diffused light
+backlit
+soft key light
+dramatic rim light
+three point lighting
+Rembrandt lighting
+volumetric light

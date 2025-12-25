@@ -1,0 +1,11 @@
+earrings
+bracelet
+watch
+necklace
+sunglasses
+ring
+scarf
+hat
+choker
+rings
+handbag

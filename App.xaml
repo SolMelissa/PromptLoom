@@ -1,0 +1,30 @@
+<Application x:Class="PromptLoom.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnMainWindowClose">
+  <Application.Resources>
+    <SolidColorBrush x:Key="BgMain" Color="#FFF9FAFC"/>
+    <SolidColorBrush x:Key="PanelBg" Color="#FFF1F6FA"/>
+    <SolidColorBrush x:Key="AccentPink" Color="#FFE36BAE"/>
+    <SolidColorBrush x:Key="AccentCyan" Color="#FF6FD3E8"/>
+    <SolidColorBrush x:Key="BorderSoft" Color="#33222222"/>
+    <SolidColorBrush x:Key="InputCyan" Color="#FFE9FBFF"/>
+    <SolidColorBrush x:Key="PromptPink" Color="#FFFFEEF6"/>
+
+    <!--
+      1.7.0.4 UI fix:
+      Some systems/themes made nested TabControl headers appear invisible (low-contrast / collapsed).
+      These lightweight defaults keep tab strips readable without forcing heavy custom templates.
+    -->
+    <Style TargetType="TabControl">
+      <Setter Property="TabStripPlacement" Value="Top"/>
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <Style TargetType="TabItem">
+      <Setter Property="Foreground" Value="#222"/>
+      <Setter Property="MinHeight" Value="30"/>
+      <Setter Property="Padding" Value="10,6"/>
+    </Style>
+  </Application.Resources>
+</Application>
