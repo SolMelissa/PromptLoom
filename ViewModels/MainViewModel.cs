@@ -1,3 +1,5 @@
+// FIX: build error CS0103 (AutoSave missing) when randomizing categories/subcategories | CAUSE: refactor removed helper used in event handlers
+// CHANGE: reintroduce AutoSave helper to funnel into debounced queue | DATE: 2026-03-02
 // FIX: build error CS1039 (Unterminated string literal) in TestSwarmConnection | CAUSE: multiline interpolated string split across lines
 // CHANGE: keep the string on one source line using \n escape | DATE: 2025-12-22
 // FIX: build error CS0103 (missing TryParseSwarmWsFrame symbol) | CAUSE: parser helper exists as SwarmWsParser.TryParseSwarmWsFrame but was called unqualified
@@ -944,6 +946,11 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         }
 
         Run();
+    }
+
+    private void AutoSave()
+    {
+        QueueAutoSave();
     }
 
     private void QueueAutoSave()

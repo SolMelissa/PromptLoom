@@ -1,4 +1,8 @@
 /*
+FIX: build error CS0246 (BitmapSource missing) when computing click-outside detection.
+CAUSE: Imaging namespace was not imported in the code-behind.
+CHANGE: Add System.Windows.Media.Imaging using so BitmapSource resolves. 2026-03-02
+
 FIX: Image overlay needed zoom + pan without closing the overlay when clicking on the image.
 CAUSE: Previous overlay used a Button wrapping the Image, so any click closed it and there was no zoom/pan.
 CHANGE: Added ZoomPanImage UserControl with wheel-zoom + drag-pan + double-click reset. 2025-12-24
@@ -9,6 +13,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace PromptLoom.Controls;
 
