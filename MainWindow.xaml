@@ -1,4 +1,4 @@
-<!-- Bugfix: Share icon button styling across Button and ToggleButton without XamlParseException or parameter mismatch errors by using a ButtonBase base style with type-specific wrappers. -->
+<!-- Bugfix: Allow the shared IconBtn style to apply to ToggleButton instances to prevent XamlParseException popups triggered by a Button-only style target. -->
 <Window x:Class="PromptLoom.MainWindow"
         PreviewKeyDown="MainWindow_OnPreviewKeyDown"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -25,8 +25,8 @@
         <Geometry x:Key="IcoSelectAll">M 6,7 H 18 V 9 H 6 Z M 6,11 H 18 V 13 H 6 Z M 6,15 H 18 V 17 H 6 Z M 4.5,12 L 3.2,10.7 L 2,11.9 L 4.5,14.4 L 8.7,10.2 L 7.5,9 Z</Geometry>
         <Geometry x:Key="IcoSelectNone">M 12,2.5 A 9.5,9.5 0 1 1 11.999,2.5 Z M 7,11 H 17 V 13 H 7 Z</Geometry>
 
-        <!-- Round icon button styles -->
-        <Style x:Key="IconBtnBase" TargetType="ButtonBase">
+        <!-- Round icon button style -->
+        <Style x:Key="IconBtn" TargetType="ButtonBase">
             <Setter Property="Width" Value="26"/>
             <Setter Property="Height" Value="26"/>
             <Setter Property="Padding" Value="0"/>
