@@ -1,3 +1,4 @@
+<!-- Bugfix: Allow the shared IconBtn style to apply to ToggleButton instances to prevent XamlParseException popups triggered by a Button-only style target. -->
 <Window x:Class="PromptLoom.MainWindow"
         PreviewKeyDown="MainWindow_OnPreviewKeyDown"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -25,7 +26,7 @@
         <Geometry x:Key="IcoSelectNone">M 12,2.5 A 9.5,9.5 0 1 1 11.999,2.5 Z M 7,11 H 17 V 13 H 7 Z</Geometry>
 
         <!-- Round icon button style -->
-        <Style x:Key="IconBtn" TargetType="Button">
+        <Style x:Key="IconBtn" TargetType="ButtonBase">
             <Setter Property="Width" Value="26"/>
             <Setter Property="Height" Value="26"/>
             <Setter Property="Padding" Value="0"/>
@@ -36,7 +37,7 @@
             <Setter Property="ToolTipService.ShowDuration" Value="60000"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="Button">
+                    <ControlTemplate TargetType="ButtonBase">
                         <Border x:Name="Bd"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
