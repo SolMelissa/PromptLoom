@@ -18,12 +18,12 @@ public sealed class FakeAppDataStore : IAppDataStore
         RootDir = rootDir;
     }
 
-    public void EnsureInitialized(string installDir, ErrorReporter errors)
+    public void EnsureInitialized(string installDir, IErrorReporter errors)
     {
         // no-op for tests
     }
 
-    public void RestoreBundledCategories(string installDir, ErrorReporter errors)
+    public void RestoreBundledCategories(string installDir, IErrorReporter errors)
     {
         // no-op for tests
     }

@@ -1,3 +1,9 @@
+// FIX: Add logging and Swarm client seams for expanded testing.
+// CAUSE: Static ErrorReporter and direct SwarmUiClient construction blocked mock injection.
+// CHANGE: Inject IErrorReporter and ISwarmUiClientFactory. 2025-12-25
+// FIX: Add file system and AppData store seams for expanded testing.
+// CAUSE: Direct System.IO and static AppDataStore access made persistence paths hard to test.
+// CHANGE: Inject IFileSystem and IAppDataStore. 2025-12-25
 // FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
 // CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
 // CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
@@ -55,6 +61,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
 {
     private readonly string _installDir;
     private readonly SchemaService _schema;
+    private readonly IFileSystem _fileSystem;
+    private readonly IAppDataStore _appDataStore;
     private readonly PromptEngine _engine;
     private readonly IWildcardFileReader _fileReader;
     private readonly IClock _clock;
@@ -64,8 +72,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IClipboardService _clipboard;
     private readonly IProcessService _process;
     private readonly IDispatcherService _dispatcher;
-
-    private readonly ErrorReporter _errors = ErrorReporter.Instance;
+    private readonly ISwarmUiClientFactory _swarmClientFactory;
+    private readonly IErrorReporter _errors;
 
     // Reuse a single HttpClient instance for image downloads.
     private static readonly HttpClient s_http = new HttpClient();
@@ -546,10 +554,18 @@ private string _promptText = "";
         IUiDialogService? uiDialog = null,
         IClipboardService? clipboard = null,
         IProcessService? process = null,
-        IDispatcherService? dispatcher = null)
+        IDispatcherService? dispatcher = null,
+        IFileSystem? fileSystem = null,
+        IAppDataStore? appDataStore = null,
+        IErrorReporter? errorReporter = null,
+        ISwarmUiClientFactory? swarmClientFactory = null)
     {
+        _errors = errorReporter ?? new ErrorReporterAdapter();
+        _swarmClientFactory = swarmClientFactory ?? new SwarmUiClientFactory();
         _errors.Info("MainViewModel ctor begin");
 
+        _fileSystem = fileSystem ?? new FileSystem();
+        _appDataStore = appDataStore ?? new AppDataStoreAdapter();
         _fileReader = fileReader ?? new WildcardFileReader();
         _clock = clock ?? new SystemClock();
         _randomSource = randomSource ?? new SystemRandomSource();
@@ -564,50 +580,50 @@ private string _promptText = "";
         _errors.Info("Resolved InstallDir: " + _installDir);
 
         // Persist Categories + Outputs across versions.
-        AppDataStore.EnsureInitialized(_installDir, _errors);
-        var root = AppDataStore.RootDir;
+        _appDataStore.EnsureInitialized(_installDir, _errors);
+        var root = _appDataStore.RootDir;
         _errors.Info("Using AppData RootDir: " + root);
 
-        _schema = new SchemaService(root);
+        _schema = new SchemaService(root, _fileSystem);
         _errors.Info("SchemaService created. CategoriesDir=" + _schema.CategoriesDir);
 
-        ReloadCommand = new RelayCommand("Reload", _ => Reload());
-        SaveCommand = new RelayCommand("Save", _ => Save());
-        CopyCommand = new RelayCommand("Copy", _ => Copy());
-        SendToSwarmUiCommand = new RelayCommand("SendToSwarmUi", _ => SendToSwarmUi());
-        SendBatchToSwarmUiCommand = new RelayCommand("SendBatchToSwarmUi", _ => SendBatchToSwarmUi());
-        RandomizeCommand = new RelayCommand("Randomize", _ => Randomize());
-        TestSwarmConnectionCommand = new RelayCommand("TestSwarmConnection", _ => TestSwarmConnection());
-        RefreshSwarmModelsCommand = new RelayCommand("RefreshSwarmModels", _ => RefreshSwarmModels());
-        RefreshSwarmLorasCommand = new RelayCommand("RefreshSwarmLoras", _ => RefreshSwarmLoras());
-        ShowImageOverlayCommand = new RelayCommand("ShowImageOverlay", p => ShowImageOverlay(p));
-        HideImageOverlayCommand = new RelayCommand("HideImageOverlay", _ => HideImageOverlay());
-        ToggleOverlayDetailsCommand = new RelayCommand("ToggleOverlayDetails", _ => OverlayDetailsExpanded = !OverlayDetailsExpanded);
-        OverlayPrevCommand = new RelayCommand("OverlayPrev", _ => NavigateOverlay(-1));
-        OverlayNextCommand = new RelayCommand("OverlayNext", _ => NavigateOverlay(+1));
-        OpenSwarmUiCommand = new RelayCommand("OpenSwarmUi", _ => OpenSwarmUi());
-        SaveOutputCommand = new RelayCommand("SaveOutput", _ => SaveOutput());
-        OpenFolderCommand = new RelayCommand("OpenFolder", _ => OpenFolder());
-        RestoreOriginalCategoriesCommand = new RelayCommand("RestoreOriginalCategories", _ => RestoreOriginalCategories());
-        SelectSubCategoryCommand = new RelayCommand("SelectSubCategory", p => SelectSubCategory(p));
-        SelectEntryCommand = new RelayCommand("SelectEntry", p => SelectEntry(p));
-        SelectAllSubCategoriesCommand = new RelayCommand("SelectAllSubCategories", p => SelectAllSubCategories(p));
-        SelectNoneSubCategoriesCommand = new RelayCommand("SelectNoneSubCategories", p => SelectNoneSubCategories(p));
-        SelectAllEntriesCommand = new RelayCommand("SelectAllEntries", p => SelectAllEntries(p));
-        SelectNoneEntriesCommand = new RelayCommand("SelectNoneEntries", p => SelectNoneEntries(p));
+        ReloadCommand = new RelayCommand("Reload", _ => Reload(), errorReporter: _errors);
+        SaveCommand = new RelayCommand("Save", _ => Save(), errorReporter: _errors);
+        CopyCommand = new RelayCommand("Copy", _ => Copy(), errorReporter: _errors);
+        SendToSwarmUiCommand = new RelayCommand("SendToSwarmUi", _ => SendToSwarmUi(), errorReporter: _errors);
+        SendBatchToSwarmUiCommand = new RelayCommand("SendBatchToSwarmUi", _ => SendBatchToSwarmUi(), errorReporter: _errors);
+        RandomizeCommand = new RelayCommand("Randomize", _ => Randomize(), errorReporter: _errors);
+        TestSwarmConnectionCommand = new RelayCommand("TestSwarmConnection", _ => TestSwarmConnection(), errorReporter: _errors);
+        RefreshSwarmModelsCommand = new RelayCommand("RefreshSwarmModels", _ => RefreshSwarmModels(), errorReporter: _errors);
+        RefreshSwarmLorasCommand = new RelayCommand("RefreshSwarmLoras", _ => RefreshSwarmLoras(), errorReporter: _errors);
+        ShowImageOverlayCommand = new RelayCommand("ShowImageOverlay", p => ShowImageOverlay(p), errorReporter: _errors);
+        HideImageOverlayCommand = new RelayCommand("HideImageOverlay", _ => HideImageOverlay(), errorReporter: _errors);
+        ToggleOverlayDetailsCommand = new RelayCommand("ToggleOverlayDetails", _ => OverlayDetailsExpanded = !OverlayDetailsExpanded, errorReporter: _errors);
+        OverlayPrevCommand = new RelayCommand("OverlayPrev", _ => NavigateOverlay(-1), errorReporter: _errors);
+        OverlayNextCommand = new RelayCommand("OverlayNext", _ => NavigateOverlay(+1), errorReporter: _errors);
+        OpenSwarmUiCommand = new RelayCommand("OpenSwarmUi", _ => OpenSwarmUi(), errorReporter: _errors);
+        SaveOutputCommand = new RelayCommand("SaveOutput", _ => SaveOutput(), errorReporter: _errors);
+        OpenFolderCommand = new RelayCommand("OpenFolder", _ => OpenFolder(), errorReporter: _errors);
+        RestoreOriginalCategoriesCommand = new RelayCommand("RestoreOriginalCategories", _ => RestoreOriginalCategories(), errorReporter: _errors);
+        SelectSubCategoryCommand = new RelayCommand("SelectSubCategory", p => SelectSubCategory(p), errorReporter: _errors);
+        SelectEntryCommand = new RelayCommand("SelectEntry", p => SelectEntry(p), errorReporter: _errors);
+        SelectAllSubCategoriesCommand = new RelayCommand("SelectAllSubCategories", p => SelectAllSubCategories(p), errorReporter: _errors);
+        SelectNoneSubCategoriesCommand = new RelayCommand("SelectNoneSubCategories", p => SelectNoneSubCategories(p), errorReporter: _errors);
+        SelectAllEntriesCommand = new RelayCommand("SelectAllEntries", p => SelectAllEntries(p), errorReporter: _errors);
+        SelectNoneEntriesCommand = new RelayCommand("SelectNoneEntries", p => SelectNoneEntries(p), errorReporter: _errors);
 
-        MoveCategoryUpCommand = new RelayCommand("MoveCategoryUp", p => MoveCategoryUp(p));
-        MoveCategoryDownCommand = new RelayCommand("MoveCategoryDown", p => MoveCategoryDown(p));
-        MoveSubCategoryUpCommand = new RelayCommand("MoveSubCategoryUp", p => MoveSubCategoryUp(p));
-        MoveSubCategoryDownCommand = new RelayCommand("MoveSubCategoryDown", p => MoveSubCategoryDown(p));
+        MoveCategoryUpCommand = new RelayCommand("MoveCategoryUp", p => MoveCategoryUp(p), errorReporter: _errors);
+        MoveCategoryDownCommand = new RelayCommand("MoveCategoryDown", p => MoveCategoryDown(p), errorReporter: _errors);
+        MoveSubCategoryUpCommand = new RelayCommand("MoveSubCategoryUp", p => MoveSubCategoryUp(p), errorReporter: _errors);
+        MoveSubCategoryDownCommand = new RelayCommand("MoveSubCategoryDown", p => MoveSubCategoryDown(p), errorReporter: _errors);
 
-        MoveEntryUpCommand = new RelayCommand("MoveEntryUp", p => MoveEntryUp(p));
-        MoveEntryDownCommand = new RelayCommand("MoveEntryDown", p => MoveEntryDown(p));
-        SaveEntryFileCommand = new RelayCommand("SaveEntryFile", _ => SaveEntryFile());
-        OpenEntryFileCommand = new RelayCommand("OpenEntryFile", _ => OpenEntryFile());
+        MoveEntryUpCommand = new RelayCommand("MoveEntryUp", p => MoveEntryUp(p), errorReporter: _errors);
+        MoveEntryDownCommand = new RelayCommand("MoveEntryDown", p => MoveEntryDown(p), errorReporter: _errors);
+        SaveEntryFileCommand = new RelayCommand("SaveEntryFile", _ => SaveEntryFile(), errorReporter: _errors);
+        OpenEntryFileCommand = new RelayCommand("OpenEntryFile", _ => OpenEntryFile(), errorReporter: _errors);
 
-        RandomizeCategoryOnceCommand = new RelayCommand("RandomizeCategoryOnce", p => RandomizeCategoryOnce(p));
-        RandomizeSubCategoryOnceCommand = new RelayCommand("RandomizeSubCategoryOnce", p => RandomizeSubCategoryOnce(p));
+        RandomizeCategoryOnceCommand = new RelayCommand("RandomizeCategoryOnce", p => RandomizeCategoryOnce(p), errorReporter: _errors);
+        RandomizeSubCategoryOnceCommand = new RelayCommand("RandomizeSubCategoryOnce", p => RandomizeSubCategoryOnce(p), errorReporter: _errors);
 
         _errors.Info("MainViewModel ctor end");
     
@@ -683,7 +699,7 @@ private string _promptText = "";
     /// Finds the most likely app root folder containing the Categories directory.
     /// This helps when running under dotnet run where BaseDirectory points at bin/Debug.
     /// </summary>
-    private static string FindInstallDir()
+    private string FindInstallDir()
     {
         var current = AppContext.BaseDirectory;
         for (var i = 0; i < 6; i++)
@@ -692,20 +708,20 @@ private string _promptText = "";
             // When running from an extracted release zip, Categories lives next to the exe.
             // When running under dotnet run, Categories lives at the project root and we need to walk upward.
             var csproj = Path.Combine(current, "PromptLoom.csproj");
-            if (File.Exists(csproj))
+            if (_fileSystem.FileExists(csproj))
                 return current;
 
             var categoriesDir = Path.Combine(current, "Categories");
-            if (Directory.Exists(categoriesDir))
+            if (_fileSystem.DirectoryExists(categoriesDir))
             {
                 // Heuristic: if Categories has any content (folders/files) OR any _category.json,
                 // we assume this is the right root.
                 try
                 {
-                    if (Directory.EnumerateFileSystemEntries(categoriesDir).Any())
+                    if (_fileSystem.EnumerateFileSystemEntries(categoriesDir).Any())
                         return current;
 
-                    if (Directory.EnumerateFiles(categoriesDir, "_category.json", SearchOption.AllDirectories).Any())
+                    if (_fileSystem.EnumerateFiles(categoriesDir, "_category.json", SearchOption.AllDirectories).Any())
                         return current;
                 }
                 catch
@@ -715,7 +731,7 @@ private string _promptText = "";
             }
 
             var categoriesZip = Path.Combine(current, "Categories.zip");
-            if (File.Exists(categoriesZip))
+            if (_fileSystem.FileExists(categoriesZip))
                 return current;
 
             var parent = Directory.GetParent(current);
@@ -1032,7 +1048,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         }, token);
     }
 
-    private string UserSettingsPath => Path.Combine(AppDataStore.RootDir, "user_settings.json");
+    private string UserSettingsPath => Path.Combine(_appDataStore.RootDir, "user_settings.json");
 
     private sealed class UserSettings
     {
@@ -1062,10 +1078,10 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
     {
         try
         {
-            if (!File.Exists(UserSettingsPath))
+            if (!_fileSystem.FileExists(UserSettingsPath))
                 return;
 
-            var s = JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(UserSettingsPath)) ?? new UserSettings();
+            var s = JsonSerializer.Deserialize<UserSettings>(_fileSystem.ReadAllText(UserSettingsPath)) ?? new UserSettings();
 
             SwarmUrl = s.SwarmUrl;
             SwarmToken = s.SwarmToken;
@@ -1098,7 +1114,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
     {
         try
         {
-            Directory.CreateDirectory(AppDataStore.RootDir);
+            _fileSystem.CreateDirectory(_appDataStore.RootDir);
 
             var s = new UserSettings
             {
@@ -1124,7 +1140,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 BatchRandomizePrompts = BatchRandomizePrompts
             };
 
-            File.WriteAllText(UserSettingsPath, JsonSerializer.Serialize(s, new JsonSerializerOptions { WriteIndented = true }));
+            _fileSystem.WriteAllText(UserSettingsPath, JsonSerializer.Serialize(s, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception ex)
         {
@@ -1532,17 +1548,8 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         }
     }
 
-    private SwarmUiClient BuildSwarmClient(Uri baseUri)
-    {
-        return new SwarmUiClient(new SwarmUiClientOptions
-        {
-            BaseUrl = baseUri,
-            AutoSession = true,
-            SwarmToken = string.IsNullOrWhiteSpace(SwarmToken) ? null : SwarmToken,
-            // Timeout is controlled via CancellationToken + user cancellation UI.
-            Timeout = System.Threading.Timeout.InfiniteTimeSpan
-        });
-    }
+    private IAppSwarmUiClient BuildSwarmClient(Uri baseUri)
+        => _swarmClientFactory.Create(baseUri, SwarmToken);
 
     private void AddRecentBatch(RecentSwarmBatchViewModel batch)
     {
@@ -1615,7 +1622,7 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
 
     
 
-    private async void TestSwarmConnection()
+    internal async void TestSwarmConnection()
     {
         try
         {
@@ -1640,7 +1647,7 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
         }
     }
 
-    private async void RefreshSwarmModels()
+    internal async void RefreshSwarmModels()
     {
         try
         {
@@ -1679,7 +1686,7 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
         }
     }
 
-    private async void RefreshSwarmLoras()
+    internal async void RefreshSwarmLoras()
     {
         try
         {
@@ -1728,11 +1735,11 @@ private void SaveOutput()
 
         try
         {
-            Directory.CreateDirectory(_schema.OutputDir);
+            _fileSystem.CreateDirectory(_schema.OutputDir);
             var ts = DateTime.Now;
             var baseName = $"prompt_{ts:yyyyMMdd_HHmmss}";
             var path = Path.Combine(_schema.OutputDir, baseName + ".txt");
-            File.WriteAllText(path, PromptText);
+            _fileSystem.WriteAllText(path, PromptText);
             SystemMessages = $"Saved prompt to {path}";
         }
         catch (Exception ex)
@@ -1767,7 +1774,7 @@ private void SaveOutput()
         try
         {
             // This is an explicit, user-initiated action. We always back up the current Categories first.
-            AppDataStore.RestoreBundledCategories(_installDir, _errors);
+            _appDataStore.RestoreBundledCategories(_installDir, _errors);
 
             // Reload view-model state from disk.
             Reload();
@@ -1843,7 +1850,7 @@ private void SaveOutput()
         try
         {
             EntryEditorPath = SelectedEntry.FilePath;
-            EntryEditorText = File.Exists(SelectedEntry.FilePath) ? File.ReadAllText(SelectedEntry.FilePath) : "";
+            EntryEditorText = _fileSystem.FileExists(SelectedEntry.FilePath) ? _fileSystem.ReadAllText(SelectedEntry.FilePath) : "";
         }
         catch (Exception ex)
         {
@@ -1857,7 +1864,7 @@ private void SaveOutput()
         if (SelectedEntry is null) return;
         try
         {
-            File.WriteAllText(SelectedEntry.FilePath, EntryEditorText ?? "");
+            _fileSystem.WriteAllText(SelectedEntry.FilePath, EntryEditorText ?? "");
             _errors.Info("Saved entry file: " + SelectedEntry.FilePath);
             RefreshSelectedPreview();
 

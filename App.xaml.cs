@@ -4,6 +4,12 @@
 // FIX: Wire UI service wrappers from composition root for testable side-effect abstractions.
 // CAUSE: View model depended on default service creation, making seams harder to override.
 // CHANGE: App constructs and injects UI wrappers. 2025-12-25
+// FIX: Provide AppData store and file system seams from composition root for future testing.
+// CAUSE: View model created its own default instances, making overrides less explicit.
+// CHANGE: App passes default IAppDataStore and IFileSystem implementations. 2025-12-25
+// FIX: Provide logging and Swarm client seams from composition root for future testing.
+// CAUSE: View model created its own defaults for logging and Swarm client construction.
+// CHANGE: App passes default IErrorReporter and ISwarmUiClientFactory. 2025-12-25
 
 using System;
 using System.Threading.Tasks;
@@ -67,7 +73,11 @@ public partial class App : Application
                 uiDialog: new UiDialogService(),
                 clipboard: new ClipboardService(),
                 process: new ProcessService(),
-                dispatcher: new DispatcherService());
+                dispatcher: new DispatcherService(),
+                fileSystem: new FileSystem(),
+                appDataStore: new AppDataStoreAdapter(),
+                errorReporter: new ErrorReporterAdapter(),
+                swarmClientFactory: new SwarmUiClientFactory());
             var window = new MainWindow(viewModel);
             MainWindow = window;
             errors.Info("Showing MainWindow");
