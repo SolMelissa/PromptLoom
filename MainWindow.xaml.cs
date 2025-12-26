@@ -1,3 +1,7 @@
+// FIX: Allow MainWindow to accept an injected MainViewModel instead of constructing it directly.
+// CAUSE: View-owned VM creation was an MVVM violation and blocked simple DI/testing.
+// CHANGE: Add constructor injection and reuse existing deferred Initialize. 2025-12-25
+
 using System;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,8 +16,14 @@ namespace PromptLoom;
 
 public partial class MainWindow : Window
 {
-    public MainWindow()
+    private readonly MainViewModel? _viewModel;
+
+    /// <summary>
+    /// Creates a new main window with an optional injected view model.
+    /// </summary>
+    public MainWindow(MainViewModel? viewModel)
     {
+        _viewModel = viewModel;
         ErrorReporter.Instance.Info("MainWindow ctor begin");
         InitializeComponent();
         ErrorReporter.Instance.Info("MainWindow InitializeComponent done");
@@ -30,8 +40,8 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    ErrorReporter.Instance.Info("MainWindow creating MainViewModel");
-                    var vm = new MainViewModel();
+                    var vm = _viewModel ?? new MainViewModel();
+                    ErrorReporter.Instance.Info("MainWindow using MainViewModel");
                     DataContext = vm;
                     ErrorReporter.Instance.Info("MainWindow DataContext set");
                     vm.Initialize();
@@ -49,6 +59,14 @@ public partial class MainWindow : Window
                 }
             }), DispatcherPriority.Loaded);
         };
+    }
+
+    /// <summary>
+    /// Creates a new main window (design-time or fallback path).
+    /// </summary>
+    public MainWindow()
+        : this(null)
+    {
     }
 
     private void OnAnyButtonClicked(object sender, RoutedEventArgs e)

@@ -44,6 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="**\*.cs" Exclude="External\**\*.cs;bin\**;obj\**" />
+    <!-- Build fix: exclude test sources from the app project to avoid pulling xUnit references into WPF builds. -->
+    <Compile Include="**\*.cs" Exclude="External\**\*.cs;bin\**;obj\**;PromptLoom.Tests\**\*.cs" />
   </ItemGroup>
 </Project>

@@ -1,3 +1,4 @@
+<!-- Bugfix: Fix duplicate IconBtn resource key by renaming base style to IconBtnBase so style lookups are unambiguous. -->
 <!-- Bugfix: Allow the shared IconBtn style to apply to ToggleButton instances to prevent XamlParseException popups triggered by a Button-only style target. -->
 <Window x:Class="PromptLoom.MainWindow"
         PreviewKeyDown="MainWindow_OnPreviewKeyDown"
@@ -26,7 +27,7 @@
         <Geometry x:Key="IcoSelectNone">M 12,2.5 A 9.5,9.5 0 1 1 11.999,2.5 Z M 7,11 H 17 V 13 H 7 Z</Geometry>
 
         <!-- Round icon button style -->
-        <Style x:Key="IconBtn" TargetType="ButtonBase">
+        <Style x:Key="IconBtnBase" TargetType="ButtonBase">
             <Setter Property="Width" Value="26"/>
             <Setter Property="Height" Value="26"/>
             <Setter Property="Padding" Value="0"/>
