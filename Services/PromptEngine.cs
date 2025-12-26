@@ -1,3 +1,6 @@
+// FIX: Allow file/random dependencies to be injected for deterministic unit tests.
+// CAUSE: PromptEngine used static file access and Random.Shared, which are hard to control in tests.
+// CHANGE: Add injectable IWildcardFileReader and IRandomSource. 2025-12-25
 // NOTE (PromptLoom 1.7.5.7):
 // Build fix: PromptEngine.cs had its namespace/usings stripped during a cleanup pass.
 // Restored standard Service file header with PromptLoom.Services namespace and required usings.
@@ -14,16 +17,27 @@ namespace PromptLoom.Services;
 
 public sealed class PromptEngine
 {
-    
+    private readonly IWildcardFileReader _fileReader;
+    private readonly IRandomSource _randomSource;
+
     private static readonly Regex WsRx = new Regex(@"[\t\r ]+", RegexOptions.Compiled);
     private static readonly Regex CommaRx = new Regex(@"\s*,\s*", RegexOptions.Compiled);
 
 public sealed record GenerateResult(string Prompt, List<string> Messages);
 
+    /// <summary>
+    /// Creates a new prompt engine.
+    /// </summary>
+    public PromptEngine(IWildcardFileReader? fileReader = null, IRandomSource? randomSource = null)
+    {
+        _fileReader = fileReader ?? new WildcardFileReader();
+        _randomSource = randomSource ?? new SystemRandomSource();
+    }
+
     public GenerateResult Generate(IEnumerable<CategoryModel> categories, int? seed)
     {
         var msgs = new List<string>();
-        var rng = seed.HasValue ? new Random(seed.Value) : Random.Shared;
+        var rng = _randomSource.Create(seed);
 
         var orderedCats = categories
             .Where(c => c.Enabled)
@@ -102,7 +116,7 @@ public sealed record GenerateResult(string Prompt, List<string> Messages);
                         var picks = new List<string>();
                         foreach (var file in files)
                         {
-                            var fileEntries = SchemaFileReader.LoadWildcardFile(file.FilePath);
+                            var fileEntries = _fileReader.LoadWildcardFile(file.FilePath);
                             if (fileEntries.Count == 0)
                             {
                                 msgs.Add($"File '{cat.Name}/{sub.Name}/{file.Name}' has no lines.");
@@ -131,7 +145,7 @@ public sealed record GenerateResult(string Prompt, List<string> Messages);
                         if (!pickFile.Enabled)
                             msgs.Add($"Subcategory '{cat.Name}/{sub.Name}' is in single-file mode but the selected file is disabled; using it anyway.");
 
-                        entries = SchemaFileReader.LoadWildcardFile(pickFile.FilePath);
+                        entries = _fileReader.LoadWildcardFile(pickFile.FilePath);
                     }
                 }
                 catch (Exception ex)

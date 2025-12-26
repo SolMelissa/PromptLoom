@@ -1,3 +1,15 @@
+// FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
+// CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
+// CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
+// FIX: build warning CS1998 (async method without await) in SendToSwarmUi | CAUSE: async void wrapper without awaits
+// CHANGE: make SendToSwarmUi synchronous and keep fire-and-forget generation | DATE: 2025-12-25
+// FIX: Allow core dependencies (file/time/random) to be injected for tests.
+// CAUSE: MainViewModel hard-coded static services and Random.Shared, making deterministic tests difficult.
+// CHANGE: Add injectable IWildcardFileReader, IClock, and IRandomSource. 2025-12-25
+// FIX: build warning CS1998 (async method without await) in Copy | CAUSE: async void with no awaited work
+// CHANGE: make Copy synchronous and remove dummy await | DATE: 2025-12-25
+// FIX: runtime crash "Parameter count mismatch" when recomputing prompt via Dispatcher.Invoke | CAUSE: RecomputePrompt has optional parameter and was invoked as a delegate with no args
+// CHANGE: invoke RecomputePrompt through a parameterless lambda | DATE: 2025-12-25
 // FIX: build error CS0103 (AutoSave missing) when randomizing categories/subcategories | CAUSE: refactor removed helper used in event handlers
 // CHANGE: reintroduce AutoSave helper to funnel into debounced queue | DATE: 2026-03-02
 // FIX: build error CS1039 (Unterminated string literal) in TestSwarmConnection | CAUSE: multiline interpolated string split across lines
@@ -43,7 +55,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
 {
     private readonly string _installDir;
     private readonly SchemaService _schema;
-    private readonly PromptEngine _engine = new();
+    private readonly PromptEngine _engine;
+    private readonly IWildcardFileReader _fileReader;
+    private readonly IClock _clock;
+    private readonly IRandomSource _randomSource;
+    private readonly Random _random;
+    private readonly IUiDialogService _uiDialog;
+    private readonly IClipboardService _clipboard;
+    private readonly IProcessService _process;
+    private readonly IDispatcherService _dispatcher;
 
     private readonly ErrorReporter _errors = ErrorReporter.Instance;
 
@@ -515,9 +535,30 @@ private string _promptText = "";
         RefreshSwarmLoras();
     }
 
-    public MainViewModel()
+    /// <summary>
+    /// Creates a new main view model with optional injected services.
+    /// </summary>
+    public MainViewModel(
+        IWildcardFileReader? fileReader = null,
+        IClock? clock = null,
+        IRandomSource? randomSource = null,
+        PromptEngine? engine = null,
+        IUiDialogService? uiDialog = null,
+        IClipboardService? clipboard = null,
+        IProcessService? process = null,
+        IDispatcherService? dispatcher = null)
     {
         _errors.Info("MainViewModel ctor begin");
+
+        _fileReader = fileReader ?? new WildcardFileReader();
+        _clock = clock ?? new SystemClock();
+        _randomSource = randomSource ?? new SystemRandomSource();
+        _random = _randomSource.Create(null);
+        _engine = engine ?? new PromptEngine(_fileReader, _randomSource);
+        _uiDialog = uiDialog ?? new UiDialogService();
+        _clipboard = clipboard ?? new ClipboardService();
+        _process = process ?? new ProcessService();
+        _dispatcher = dispatcher ?? new DispatcherService();
 
         _installDir = FindInstallDir();
         _errors.Info("Resolved InstallDir: " + _installDir);
@@ -599,7 +640,7 @@ private string _promptText = "";
                 if (!s.IsLocked) s.CurrentEntry = "";
             }
 
-            RecomputePrompt(seedOverride: Random.Shared.Next(0, int.MaxValue));
+            RecomputePrompt(seedOverride: _random.Next(0, int.MaxValue));
             AutoSave();
         }
         finally
@@ -628,7 +669,7 @@ private string _promptText = "";
             sub.IsLocked = false;
             sub.CurrentEntry = "";
 
-            RecomputePrompt(seedOverride: Random.Shared.Next(0, int.MaxValue));
+            RecomputePrompt(seedOverride: _random.Next(0, int.MaxValue));
             AutoSave();
         }
         finally
@@ -695,7 +736,7 @@ private string _promptText = "";
             _errors.Info($"Schema loaded: {loaded.Count} categories");
 
             // Apply to UI-bound collections on the UI thread.
-            Application.Current?.Dispatcher?.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 BulkUpdate(() =>
                 {
@@ -739,7 +780,7 @@ private string _promptText = "";
         {
             _errors.Report(ex, "Reload");
             SystemMessages = _errors.LatestMessage;
-            MessageBox.Show(ex.Message, "Reload failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            _uiDialog.ShowError(ex.Message, "Reload failed");
         }
     }
 
@@ -888,7 +929,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         {
             _errors.Report(ex, "Save");
             SystemMessages = _errors.LatestMessage;
-            MessageBox.Show(ex.Message, "Save failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            _uiDialog.ShowError(ex.Message, "Save failed");
         }
     }
 
@@ -915,7 +956,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         QueueRecomputePrompt();
     }
 
-    private void QueueRecomputePrompt(bool immediate = false)
+    internal void QueueRecomputePrompt(bool immediate = false)
     {
         QueueAutoSave();
         if (IsBulkUpdating()) return;
@@ -935,7 +976,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 if (token.IsCancellationRequested) return;
 
                 // Ensure prompt recompute happens on the UI thread.
-                Application.Current?.Dispatcher?.Invoke(RecomputePrompt);
+                _dispatcher.Invoke(() => RecomputePrompt());
             }
             catch (TaskCanceledException) { }
             catch (Exception ex)
@@ -975,7 +1016,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 _schema.Save(snapshot);
                 SaveUserSettings();
 
-                Application.Current.Dispatcher.Invoke(() =>
+                _dispatcher.Invoke(() =>
                 {
                     SystemMessages = "Auto-saved.";
                 });
@@ -1126,13 +1167,12 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         }
     }
 
-    private async void Copy()
+    private void Copy()
     {
         if (string.IsNullOrWhiteSpace(PromptText)) return;
 
-        Clipboard.SetText(PromptText);
+        _clipboard.SetText(PromptText);
         ShowCopiedOnButton();
-        await Task.CompletedTask;
     }
 
     private void ShowCopiedOnButton()
@@ -1157,12 +1197,12 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         }
     }
 
-    private async void SendToSwarmUi()
+    private void SendToSwarmUi()
     {
         if (string.IsNullOrWhiteSpace(PromptText)) return;
         var seed = NormalizeSeedForSwarmUi(SeedText);
         var batch = CreateBatchForRun(title: "Single", promptSnapshot: PromptText, seed: seed);
-        Application.Current?.Dispatcher?.Invoke(() => AddRecentBatch(batch));
+        _dispatcher.Invoke(() => AddRecentBatch(batch));
         _ = StartSwarmGenerationAsync(batch, PromptText, seed);
     }
 
@@ -1171,7 +1211,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         // Fire off multiple generations grouped into a single batch.
         // "Randomized prompts" here means: regenerate the PromptLoom prompt using a fresh seed each time.
         var batch = CreateBatchForRun(title: $"Batch ×{BatchQty}", promptSnapshot: PromptText, seed: null);
-        Application.Current?.Dispatcher?.Invoke(() => AddRecentBatch(batch));
+        _dispatcher.Invoke(() => AddRecentBatch(batch));
 
         for (var i = 0; i < BatchQty; i++)
         {
@@ -1180,7 +1220,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
 
             if (BatchRandomizePrompts)
             {
-                var s = Random.Shared.Next(0, int.MaxValue);
+                var s = _random.Next(0, int.MaxValue);
                 seed = s;
                 try
                 {
@@ -1254,7 +1294,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         var settings = $"Model: {effectiveModel}   Steps: {steps}   CFG: {cfg}   Seed: {seedText}";
         if (!string.IsNullOrWhiteSpace(loras)) settings += $"   LoRAs: {loras}";
 
-        return new RecentSwarmBatchViewModel(title, promptSnapshot ?? string.Empty, settings);
+        return new RecentSwarmBatchViewModel(title, promptSnapshot ?? string.Empty, settings, _clock);
     }
 
     private async Task StartSwarmGenerationAsync(RecentSwarmBatchViewModel batch, string promptSnapshot, long? seed)
@@ -1284,7 +1324,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                     }
                     catch { /* best effort */ }
                 });
-                Application.Current?.Dispatcher?.Invoke(() =>
+                _dispatcher.Invoke(() =>
                 {
                     if (item is null) return;
                     item.IsGenerating = false;
@@ -1301,7 +1341,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
 
             // Initial placeholder thumbnail generated from prompt text.
             item.Thumbnail = ThumbnailRenderer.RenderPromptThumbnail(promptSnapshot);
-            Application.Current?.Dispatcher?.Invoke(() => batch.Items.Add(item));
+            _dispatcher.Invoke(() => batch.Items.Add(item));
 
             var client = BuildSwarmClient(baseUri);
             var (suggestedModel, w, h) = await client.GetSuggestedModelAndResolutionAsync(cts.Token).ConfigureAwait(false);
@@ -1341,7 +1381,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
 
                 if (SwarmWsParser.TryParseSwarmWsFrame(frame, out var status, out var progress01, out var previewDataUrl, out var finalImageRef, out var seedUsed))
                 {
-                    Application.Current?.Dispatcher?.Invoke(() =>
+                    _dispatcher.Invoke(() =>
                     {
                         if (item is null) return;
 
@@ -1374,7 +1414,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                         var final = await TryDownloadSwarmImageAsync(baseUri, finalImageRef!, cts.Token).ConfigureAwait(false);
                         if (final is not null)
                         {
-                            Application.Current?.Dispatcher?.Invoke(() =>
+                            _dispatcher.Invoke(() =>
                             {
                                 if (item is null) return;
                                 item.Thumbnail = final;
@@ -1384,7 +1424,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 }
             }
 
-            Application.Current?.Dispatcher?.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 if (item is null) return;
                 if (!item.IsCancelled)
@@ -1407,7 +1447,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         {
             _errors.Report(ex, "StartSwarmGenerationAsync");
 
-            Application.Current?.Dispatcher?.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 if (item is null) return;
                 item.IsGenerating = false;
@@ -1417,7 +1457,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
             });
 
             SystemMessages = _errors.LatestMessage;
-            MessageBox.Show(ex.Message, "SwarmUI send failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            _uiDialog.ShowError(ex.Message, "SwarmUI send failed");
         }
         finally
         {
@@ -1568,7 +1608,7 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
         // property will cause RecomputePrompt() via its setter.
         // NOTE (2025-12-22): SwarmUI rejects negative seeds other than -1.
         // Keep randomized seeds non-negative so they are always valid for both PromptLoom and SwarmUI.
-        SeedText = Random.Shared.Next(0, int.MaxValue).ToString();
+        SeedText = _random.Next(0, int.MaxValue).ToString();
         // When prefixes/suffixes are changed after randomization, recompute prompt using new random seed.
         QueueRecomputePrompt(immediate: true);
     }
@@ -1585,8 +1625,8 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
             var client = BuildSwarmClient(baseUri);
             var status = await client.GetCurrentStatusAsync(CancellationToken.None).ConfigureAwait(false);
 
-	            Application.Current?.Dispatcher?.Invoke(() =>
-	            {
+	            _dispatcher.Invoke(() =>
+            {
 	                // FIX: build error CS1039 "Unterminated string literal" | CAUSE: multiline interpolated string split across lines
 	                // CHANGE: use explicit newline escape to keep the string on one source line
 	                // DATE: 2025-12-22
@@ -1612,7 +1652,7 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
             var client = BuildSwarmClient(baseUri);
             var models = await client.ListStableDiffusionModelsAsync(depth: 8, ct: CancellationToken.None).ConfigureAwait(false);
 
-            Application.Current?.Dispatcher?.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 SwarmModels.Clear();
                 foreach (var m in models)
@@ -1651,7 +1691,7 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
             var client = BuildSwarmClient(baseUri);
             var loras = await client.ListLorasAsync(depth: 8, ct: CancellationToken.None).ConfigureAwait(false);
 
-            Application.Current?.Dispatcher?.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 SwarmLoras.Clear();
                 foreach (var l in loras)
@@ -1673,7 +1713,7 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
     {
         try
         {
-            Process.Start(new ProcessStartInfo { FileName = SwarmUrl, UseShellExecute = true });
+            _process.Start(new ProcessStartInfo { FileName = SwarmUrl, UseShellExecute = true });
         }
         catch (Exception ex)
         {
@@ -1699,7 +1739,7 @@ private void SaveOutput()
         {
             _errors.Report(ex, "SaveOutput");
             SystemMessages = _errors.LatestMessage;
-            MessageBox.Show(ex.Message, "Save prompt failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            _uiDialog.ShowError(ex.Message, "Save prompt failed");
         }
     }
 
@@ -1708,7 +1748,7 @@ private void SaveOutput()
         try
         {
             _schema.EnsureBaseFolders();
-            Process.Start(new ProcessStartInfo
+            _process.Start(new ProcessStartInfo
             {
                 FileName = _schema.CategoriesDir,
                 UseShellExecute = true
@@ -1718,7 +1758,7 @@ private void SaveOutput()
         {
             _errors.Report(ex, "OpenFolder");
             SystemMessages = _errors.LatestMessage;
-            MessageBox.Show(ex.Message, "Open folder failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            _uiDialog.ShowError(ex.Message, "Open folder failed");
         }
     }
 
@@ -1738,7 +1778,7 @@ private void SaveOutput()
         {
             _errors.Report(ex, "RestoreOriginalCategories");
             SystemMessages = _errors.LatestMessage;
-            MessageBox.Show(ex.Message, "Restore Categories failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            _uiDialog.ShowError(ex.Message, "Restore Categories failed");
         }
     }
 
@@ -1843,7 +1883,7 @@ private void SaveOutput()
                 FileName = SelectedEntry.FilePath,
                 UseShellExecute = true
             };
-            Process.Start(psi);
+            _process.Start(psi);
         }
         catch (Exception ex)
         {
@@ -1973,9 +2013,9 @@ private void SelectNoneEntries(object? param)
 
     private void RefreshSelectedPreview()
     {
-        if (Application.Current?.Dispatcher?.CheckAccess() == false)
+        if (!_dispatcher.CheckAccess())
         {
-            Application.Current.Dispatcher.Invoke(RefreshSelectedPreview);
+            _dispatcher.Invoke(RefreshSelectedPreview);
             return;
         }
 
@@ -2007,9 +2047,9 @@ private void SelectNoneEntries(object? param)
 
     private void RefreshSubCategoryPreview(SubCategoryModel sub)
     {
-        if (Application.Current?.Dispatcher?.CheckAccess() == false)
+        if (!_dispatcher.CheckAccess())
         {
-            Application.Current.Dispatcher.Invoke(() => RefreshSubCategoryPreview(sub));
+            _dispatcher.Invoke(() => RefreshSubCategoryPreview(sub));
             return;
         }
 
@@ -2028,7 +2068,7 @@ private void SelectNoneEntries(object? param)
             if (sub.UseAllTxtFiles)
             {
                 var files = enabled.Count > 0 ? enabled : sub.Entries.ToList();
-                entries = files.SelectMany(e => SchemaFileReader.LoadWildcardFile(e.FilePath)).ToList();
+                entries = files.SelectMany(e => _fileReader.LoadWildcardFile(e.FilePath)).ToList();
             }
             else
             {
@@ -2038,7 +2078,7 @@ private void SelectNoneEntries(object? param)
                     sub.EntrySummary = "(no entry files)";
                     return;
                 }
-                entries = SchemaFileReader.LoadWildcardFile(selected.FilePath);
+                entries = _fileReader.LoadWildcardFile(selected.FilePath);
             }
         }
         catch (Exception ex)

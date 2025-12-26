@@ -1,8 +1,16 @@
+// FIX: Move MainViewModel creation to the composition root so MainWindow no longer owns VM construction.
+// CAUSE: View code-behind was instantiating the ViewModel, limiting MVVM injection and testability.
+// CHANGE: App creates MainViewModel and passes it into MainWindow. 2025-12-25
+// FIX: Wire UI service wrappers from composition root for testable side-effect abstractions.
+// CAUSE: View model depended on default service creation, making seams harder to override.
+// CHANGE: App constructs and injects UI wrappers. 2025-12-25
+
 using System;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using PromptLoom.Services;
+using PromptLoom.ViewModels;
 
 namespace PromptLoom;
 
@@ -55,7 +63,12 @@ public partial class App : Application
             errors.Info("base.OnStartup returned");
 
             // We removed StartupUri so we can guarantee errors are visible/logged.
-            var window = new MainWindow();
+            var viewModel = new MainViewModel(
+                uiDialog: new UiDialogService(),
+                clipboard: new ClipboardService(),
+                process: new ProcessService(),
+                dispatcher: new DispatcherService());
+            var window = new MainWindow(viewModel);
             MainWindow = window;
             errors.Info("Showing MainWindow");
             window.Show();
