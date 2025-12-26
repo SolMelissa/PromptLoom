@@ -18,6 +18,8 @@
 // CHANGE: call SwarmWsParser.TryParseSwarmWsFrame explicitly | DATE: 2025-12-22
 // FIX: UX regression (Send-to-SwarmUI button text changed / implied single-flight) | CAUSE: SendToSwarmUi mutated SwarmButtonText and ran a "Sent!" timer
 // CHANGE: keep button text stable; allow multiple overlapping sends and track status per-thumbnail | DATE: 2025-12-22
+// FIX: build errors for missing injected services in MainViewModel | CAUSE: fields/ctor wiring removed during service seams refactor
+// CHANGE: reintroduce IFileSystem/IAppDataStore/IUserSettingsStore/ISwarmUiClientFactory wiring and use IErrorReporter. 2025-12-26
 
 // NOTE (PromptLoom 1.8.0.1):
 // SwarmUI integration: added a SwarmUI bridge reference and a "Send Prompt to SwarmUI" button/command.
@@ -64,8 +66,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IClipboardService _clipboard;
     private readonly IProcessService _process;
     private readonly IDispatcherService _dispatcher;
+    private readonly IFileSystem _fileSystem;
+    private readonly IAppDataStore _appDataStore;
+    private readonly IUserSettingsStore _settingsStore;
+    private readonly ISwarmUiClientFactory _swarmClientFactory;
 
-    private readonly ErrorReporter _errors = ErrorReporter.Instance;
+    private readonly IErrorReporter _errors;
 
     // Reuse a single HttpClient instance for image downloads.
     private static readonly HttpClient s_http = new HttpClient();
@@ -539,6 +545,11 @@ private string _promptText = "";
     /// Creates a new main view model with optional injected services.
     /// </summary>
     public MainViewModel(
+        IFileSystem? fileSystem = null,
+        IAppDataStore? appDataStore = null,
+        IUserSettingsStore? settingsStore = null,
+        ISwarmUiClientFactory? swarmClientFactory = null,
+        IErrorReporter? errorReporter = null,
         IWildcardFileReader? fileReader = null,
         IClock? clock = null,
         IRandomSource? randomSource = null,
@@ -548,8 +559,13 @@ private string _promptText = "";
         IProcessService? process = null,
         IDispatcherService? dispatcher = null)
     {
+        _errors = errorReporter ?? new ErrorReporterAdapter();
         _errors.Info("MainViewModel ctor begin");
 
+        _fileSystem = fileSystem ?? new FileSystem();
+        _appDataStore = appDataStore ?? new AppDataStoreAdapter();
+        _settingsStore = settingsStore ?? new UserSettingsStore(_fileSystem, _appDataStore);
+        _swarmClientFactory = swarmClientFactory ?? new SwarmUiClientFactory();
         _fileReader = fileReader ?? new WildcardFileReader();
         _clock = clock ?? new SystemClock();
         _randomSource = randomSource ?? new SystemRandomSource();
@@ -568,7 +584,7 @@ private string _promptText = "";
         var root = _appDataStore.RootDir;
         _errors.Info("Using AppData RootDir: " + root);
 
-        _schema = new SchemaService(root, _fileSystem);
+        _schema = new SchemaService(root);
         _errors.Info("SchemaService created. CategoriesDir=" + _schema.CategoriesDir);
 
         ReloadCommand = new RelayCommand("Reload", _ => Reload(), errorReporter: _errors);
