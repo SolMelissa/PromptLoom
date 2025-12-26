@@ -1,9 +1,3 @@
-// FIX: Add logging, Swarm client, and settings store seams for expanded testing.
-// CAUSE: Static ErrorReporter, direct SwarmUiClient construction, and direct settings IO blocked mock injection.
-// CHANGE: Inject IErrorReporter, ISwarmUiClientFactory, and IUserSettingsStore. 2025-12-25
-// FIX: Add file system and AppData store seams for expanded testing.
-// CAUSE: Direct System.IO and static AppDataStore access made persistence paths hard to test.
-// CHANGE: Inject IFileSystem and IAppDataStore. 2025-12-25
 // FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
 // CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
 // CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
@@ -61,8 +55,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
 {
     private readonly string _installDir;
     private readonly SchemaService _schema;
-    private readonly IFileSystem _fileSystem;
-    private readonly IAppDataStore _appDataStore;
     private readonly PromptEngine _engine;
     private readonly IWildcardFileReader _fileReader;
     private readonly IClock _clock;
@@ -72,9 +64,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IClipboardService _clipboard;
     private readonly IProcessService _process;
     private readonly IDispatcherService _dispatcher;
-    private readonly ISwarmUiClientFactory _swarmClientFactory;
-    private readonly IErrorReporter _errors;
-    private readonly IUserSettingsStore _settingsStore;
+
+    private readonly ErrorReporter _errors = ErrorReporter.Instance;
 
     // Reuse a single HttpClient instance for image downloads.
     private static readonly HttpClient s_http = new HttpClient();
@@ -555,19 +546,10 @@ private string _promptText = "";
         IUiDialogService? uiDialog = null,
         IClipboardService? clipboard = null,
         IProcessService? process = null,
-        IDispatcherService? dispatcher = null,
-        IFileSystem? fileSystem = null,
-        IAppDataStore? appDataStore = null,
-        IErrorReporter? errorReporter = null,
-        ISwarmUiClientFactory? swarmClientFactory = null,
-        IUserSettingsStore? settingsStore = null)
+        IDispatcherService? dispatcher = null)
     {
-        _errors = errorReporter ?? new ErrorReporterAdapter();
-        _swarmClientFactory = swarmClientFactory ?? new SwarmUiClientFactory();
         _errors.Info("MainViewModel ctor begin");
 
-        _fileSystem = fileSystem ?? new FileSystem();
-        _appDataStore = appDataStore ?? new AppDataStoreAdapter();
         _fileReader = fileReader ?? new WildcardFileReader();
         _clock = clock ?? new SystemClock();
         _randomSource = randomSource ?? new SystemRandomSource();
@@ -577,7 +559,6 @@ private string _promptText = "";
         _clipboard = clipboard ?? new ClipboardService();
         _process = process ?? new ProcessService();
         _dispatcher = dispatcher ?? new DispatcherService();
-        _settingsStore = settingsStore ?? new UserSettingsStore(_fileSystem, _appDataStore);
 
         _installDir = FindInstallDir();
         _errors.Info("Resolved InstallDir: " + _installDir);
