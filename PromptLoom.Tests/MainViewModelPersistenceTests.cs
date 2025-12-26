@@ -2,7 +2,7 @@
 
 using System;
 using System.IO;
-using System.Text.Json;
+using PromptLoom.Services;
 using PromptLoom.Tests.Fakes;
 using PromptLoom.ViewModels;
 
@@ -13,6 +13,13 @@ namespace PromptLoom.Tests;
 /// </summary>
 public class MainViewModelPersistenceTests
 {
+    private sealed class FakeUserSettingsStore : IUserSettingsStore
+    {
+        public UserSettings? Settings { get; set; }
+        public UserSettings? Load() => Settings;
+        public void Save(UserSettings settings) => Settings = settings;
+    }
+
     /// <summary>
     /// Loads user settings from the injected file system on construction.
     /// </summary>
@@ -22,21 +29,21 @@ public class MainViewModelPersistenceTests
         var root = "C:\\FakeRoot";
         var appData = new FakeAppDataStore(root);
         var fs = new FakeFileSystem();
-        var settingsPath = Path.Combine(root, "user_settings.json");
-        var payload = JsonSerializer.Serialize(new
+        fs.AddFile(Path.Combine(AppContext.BaseDirectory, "PromptLoom.csproj"), "");
+        var settings = new UserSettings
         {
             SwarmUrl = "http://localhost:1234",
             SwarmToken = "token",
             SendSwarmSteps = true,
             SwarmSteps = 12
-        });
-        fs.AddFile(settingsPath, payload);
-        fs.AddFile(Path.Combine(AppContext.BaseDirectory, "PromptLoom.csproj"), "");
+        };
+        var store = new FakeUserSettingsStore { Settings = settings };
 
         var vm = new MainViewModel(
             fileSystem: fs,
             appDataStore: appData,
-            dispatcher: new ImmediateDispatcherService());
+            dispatcher: new ImmediateDispatcherService(),
+            settingsStore: store);
 
         Assert.Equal("http://localhost:1234", vm.SwarmUrl);
         Assert.Equal("token", vm.SwarmToken);
@@ -54,11 +61,13 @@ public class MainViewModelPersistenceTests
         var appData = new FakeAppDataStore(root);
         var fs = new FakeFileSystem();
         fs.AddFile(Path.Combine(AppContext.BaseDirectory, "PromptLoom.csproj"), "");
+        var store = new FakeUserSettingsStore();
 
         var vm = new MainViewModel(
             fileSystem: fs,
             appDataStore: appData,
-            dispatcher: new ImmediateDispatcherService());
+            dispatcher: new ImmediateDispatcherService(),
+            settingsStore: store);
 
         vm.PromptText = "hello world";
         vm.SaveOutputCommand.Execute(null);

@@ -1,6 +1,6 @@
-// FIX: Add logging and Swarm client seams for expanded testing.
-// CAUSE: Static ErrorReporter and direct SwarmUiClient construction blocked mock injection.
-// CHANGE: Inject IErrorReporter and ISwarmUiClientFactory. 2025-12-25
+// FIX: Add logging, Swarm client, and settings store seams for expanded testing.
+// CAUSE: Static ErrorReporter, direct SwarmUiClient construction, and direct settings IO blocked mock injection.
+// CHANGE: Inject IErrorReporter, ISwarmUiClientFactory, and IUserSettingsStore. 2025-12-25
 // FIX: Add file system and AppData store seams for expanded testing.
 // CAUSE: Direct System.IO and static AppDataStore access made persistence paths hard to test.
 // CHANGE: Inject IFileSystem and IAppDataStore. 2025-12-25
@@ -74,6 +74,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IDispatcherService _dispatcher;
     private readonly ISwarmUiClientFactory _swarmClientFactory;
     private readonly IErrorReporter _errors;
+    private readonly IUserSettingsStore _settingsStore;
 
     // Reuse a single HttpClient instance for image downloads.
     private static readonly HttpClient s_http = new HttpClient();
@@ -558,7 +559,8 @@ private string _promptText = "";
         IFileSystem? fileSystem = null,
         IAppDataStore? appDataStore = null,
         IErrorReporter? errorReporter = null,
-        ISwarmUiClientFactory? swarmClientFactory = null)
+        ISwarmUiClientFactory? swarmClientFactory = null,
+        IUserSettingsStore? settingsStore = null)
     {
         _errors = errorReporter ?? new ErrorReporterAdapter();
         _swarmClientFactory = swarmClientFactory ?? new SwarmUiClientFactory();
@@ -575,6 +577,7 @@ private string _promptText = "";
         _clipboard = clipboard ?? new ClipboardService();
         _process = process ?? new ProcessService();
         _dispatcher = dispatcher ?? new DispatcherService();
+        _settingsStore = settingsStore ?? new UserSettingsStore(_fileSystem, _appDataStore);
 
         _installDir = FindInstallDir();
         _errors.Info("Resolved InstallDir: " + _installDir);
@@ -1048,40 +1051,13 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         }, token);
     }
 
-    private string UserSettingsPath => Path.Combine(_appDataStore.RootDir, "user_settings.json");
-
-    private sealed class UserSettings
-    {
-        public string SwarmUrl { get; set; } = "http://127.0.0.1:7801";
-        public string SwarmToken { get; set; } = "";
-
-        public bool SendSwarmModelOverride { get; set; } = true;
-        public string? SwarmSelectedModel { get; set; }
-
-        public bool SendSwarmSteps { get; set; }
-        public int SwarmSteps { get; set; }
-
-        public bool SendSwarmCfgScale { get; set; }
-        public double SwarmCfgScale { get; set; }
-
-        public bool SendSwarmLoras { get; set; }
-        public string? SwarmSelectedLora1 { get; set; }
-        public double SwarmLora1Weight { get; set; } = 1.0;
-        public string? SwarmSelectedLora2 { get; set; }
-        public double SwarmLora2Weight { get; set; } = 1.0;
-
-        public int BatchQty { get; set; } = 1;
-        public bool BatchRandomizePrompts { get; set; }
-    }
-
     private void LoadUserSettings()
     {
         try
         {
-            if (!_fileSystem.FileExists(UserSettingsPath))
+            var s = _settingsStore.Load();
+            if (s is null)
                 return;
-
-            var s = JsonSerializer.Deserialize<UserSettings>(_fileSystem.ReadAllText(UserSettingsPath)) ?? new UserSettings();
 
             SwarmUrl = s.SwarmUrl;
             SwarmToken = s.SwarmToken;
@@ -1114,8 +1090,6 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
     {
         try
         {
-            _fileSystem.CreateDirectory(_appDataStore.RootDir);
-
             var s = new UserSettings
             {
                 SwarmUrl = SwarmUrl,
@@ -1140,7 +1114,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 BatchRandomizePrompts = BatchRandomizePrompts
             };
 
-            _fileSystem.WriteAllText(UserSettingsPath, JsonSerializer.Serialize(s, new JsonSerializerOptions { WriteIndented = true }));
+            _settingsStore.Save(s);
         }
         catch (Exception ex)
         {
