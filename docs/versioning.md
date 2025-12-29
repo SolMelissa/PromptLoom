@@ -1,4 +1,5 @@
 CHANGE LOG
+- 2025-12-29 | Request: Clarify branch exceptions | Documented main/dev handling for ChangeMade.
 - 2025-12-29 | Request: Create versioning policy | Added versioning rules and branch conventions.
 
 # Versioning
@@ -23,7 +24,8 @@ Derivation:
 - Example: 1.8.3-feat-ui -> feat.ui
 
 ## Branch Rules
-- Version-first branch names are required.
+- Version-first branch names are required for task branches.
+- main and dev are allowed exceptions and set CHANGEMADE to chore.main or chore.dev.
 - Build must fail if branch name does not match the required format.
 - On failure, prompt for user input to supply CHANGEMADE.
 

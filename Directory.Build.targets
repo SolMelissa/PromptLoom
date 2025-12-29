@@ -1,0 +1,56 @@
+<!--
+CHANGE LOG
+- 2025-12-29 | Request: Enforce versioning rules | Added git-based version calculation and branch validation.
+-->
+<Project>
+  <Target Name="SetVersionFromGit" BeforeTargets="GenerateAssemblyInfo" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="git rev-parse --abbrev-ref HEAD" ConsoleToMSBuild="true" IgnoreExitCode="false">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitBranchRaw" />
+    </Exec>
+    <Exec Command="git rev-list --count HEAD" ConsoleToMSBuild="true" IgnoreExitCode="false">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitCountRaw" />
+    </Exec>
+
+    <PropertyGroup>
+      <GitBranch>$([System.String]::Copy('$(GitBranchRaw)').Trim())</GitBranch>
+      <GitCommitCount>$([System.String]::Copy('$(GitCommitCountRaw)').Trim())</GitCommitCount>
+      <BranchPattern>^(?<ver>\d+\.\d+\.\d+)-(?<tag>feat|fix|refactor|chore|test|docs)-(?<slug>.+)$</BranchPattern>
+      <IsBranchMatch>$([System.Text.RegularExpressions.Regex]::IsMatch('$(GitBranch)', '$(BranchPattern)'))</IsBranchMatch>
+      <BranchVersion>$([System.Text.RegularExpressions.Regex]::Match('$(GitBranch)', '$(BranchPattern)').Groups['ver'].Value)</BranchVersion>
+      <BranchTag>$([System.Text.RegularExpressions.Regex]::Match('$(GitBranch)', '$(BranchPattern)').Groups['tag'].Value)</BranchTag>
+      <BranchSlug>$([System.Text.RegularExpressions.Regex]::Match('$(GitBranch)', '$(BranchPattern)').Groups['slug'].Value)</BranchSlug>
+      <BranchSlugNormalized>$([System.String]::Copy('$(BranchSlug)').Replace('-', '.'))</BranchSlugNormalized>
+      <DerivedChangeMade>$(BranchTag).$(BranchSlugNormalized)</DerivedChangeMade>
+      <IsMainBranch Condition="'$(GitBranch)' == 'main'">true</IsMainBranch>
+      <IsDevBranch Condition="'$(GitBranch)' == 'dev'">true</IsDevBranch>
+    </PropertyGroup>
+
+    <Error
+      Condition="'$(IsBranchMatch)' != 'true' and '$(IsMainBranch)' != 'true' and '$(IsDevBranch)' != 'true'"
+      Text="Versioning requires branch format MAJOR.MINOR.PATCH-<tag>-<slug> (tags: feat, fix, refactor, chore, test, docs). Rename the branch and retry." />
+
+    <PropertyGroup>
+      <BaseVersion Condition="'$(BaseVersion)' == '' and '$(IsBranchMatch)' == 'true'">$(BranchVersion)</BaseVersion>
+      <ChangeMade Condition="'$(ChangeMade)' == '' and '$(IsBranchMatch)' == 'true'">$(DerivedChangeMade)</ChangeMade>
+      <ChangeMade Condition="'$(ChangeMade)' == '' and '$(IsMainBranch)' == 'true'">chore.main</ChangeMade>
+      <ChangeMade Condition="'$(ChangeMade)' == '' and '$(IsDevBranch)' == 'true'">chore.dev</ChangeMade>
+    </PropertyGroup>
+
+    <Error
+      Condition="'$(BaseVersion)' == ''"
+      Text="Versioning requires BaseVersion (MAJOR.MINOR.PATCH). Provide /p:BaseVersion=x.y.z if not derivable from branch." />
+    <Error
+      Condition="'$(ChangeMade)' == ''"
+      Text="Versioning requires ChangeMade. Rename the branch to include a change tag (feat/fix/refactor/chore/test/docs) or provide /p:ChangeMade=tag.slug." />
+
+    <PropertyGroup>
+      <IsRelease Condition="'$(IsMainBranch)' == 'true'">true</IsRelease>
+      <VersionCore>$(BaseVersion).$(GitCommitCount)</VersionCore>
+      <Version Condition="'$(IsRelease)' == 'true'">$(VersionCore)+$(ChangeMade)</Version>
+      <Version Condition="'$(IsRelease)' != 'true'">$(VersionCore).dev+$(ChangeMade)</Version>
+      <AssemblyVersion>$(BaseVersion).0</AssemblyVersion>
+      <FileVersion>$(VersionCore)</FileVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>

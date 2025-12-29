@@ -1,9 +1,16 @@
 <!--
-Changelog:
-- 2025-12-29: Build failure (MSB4276 workload SDK resolver) -> disable workload resolver at solution scope.
+CHANGE LOG
+- 2025-12-29 | Request: Centralize versioning rules | Added versioning defaults and assembly metadata settings.
+- 2025-12-29 | Request: Build failure (MSB4276 workload SDK resolver) | Disabled workload resolver at solution scope.
 -->
 <Project>
   <PropertyGroup>
     <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <BaseVersion Condition="'$(BaseVersion)' == ''">1.8.2</BaseVersion>
   </PropertyGroup>
 </Project>
