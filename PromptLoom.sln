@@ -11,9 +11,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.Domain", "Prompt
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.Infrastructure", "PromptLoom.Infrastructure\PromptLoom.Infrastructure.csproj", "{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "External", "External", "{FECED867-96E6-44AD-B987-786198E73FFA}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SwarmUi.Client", "External\SwarmUi.Client\SwarmUi.Client.csproj", "{62673F09-07F8-420D-8815-DE2CECB33648}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SwarmUi.Client", "SwarmUi.Client\SwarmUi.Client.csproj", "{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -40,12 +38,9 @@ Global
 		{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{62673F09-07F8-420D-8815-DE2CECB33648}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{62673F09-07F8-420D-8815-DE2CECB33648}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{62673F09-07F8-420D-8815-DE2CECB33648}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{62673F09-07F8-420D-8815-DE2CECB33648}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{62673F09-07F8-420D-8815-DE2CECB33648} = {FECED867-96E6-44AD-B987-786198E73FFA}
+		{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
