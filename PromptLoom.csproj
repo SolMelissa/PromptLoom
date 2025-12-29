@@ -1,3 +1,4 @@
+<!-- ChangeLog: 2025-12-28 | Step 2 extraction | Repoint SwarmUi.Client project reference. -->
 <!-- ChangeLog: 2025-12-28 | Step 1 scaffolding | Add references for new project layout. -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -43,7 +44,7 @@
     <!-- SwarmUI bridge library (source included for easy zip distribution). -->
     <ProjectReference Include="PromptLoom.Domain\PromptLoom.Domain.csproj" />
     <ProjectReference Include="PromptLoom.Infrastructure\PromptLoom.Infrastructure.csproj" />
-    <ProjectReference Include="External\SwarmUi.Client\SwarmUi.Client.csproj" />
+    <ProjectReference Include="SwarmUi.Client\SwarmUi.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>
