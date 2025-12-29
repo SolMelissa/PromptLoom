@@ -1,0 +1,6 @@
+CHANGE LOG
+- 2025-12-29 | Request: solution map reference files | Added generated reference map.
+Solution: PromptLoom.sln
+Project: PromptLoom (PromptLoom.csproj)
+Project: PromptLoom.Tests (PromptLoom.Tests\PromptLoom.Tests.csproj)
+Project: SwarmUi.Client (External\SwarmUi.Client\SwarmUi.Client.csproj) [referenced]

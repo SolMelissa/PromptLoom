@@ -1,3 +1,7 @@
+CHANGE LOG
+- 2025-12-29 | Request: Renumber versioning policy section | Updated reference to 9.5.
+- 2025-12-29 | Request: Add versioning policy reference | Added section 9.5 referencing docs/versioning.md.
+
 AGENTS.md  
 Autonomous Agent Operating Agreement  
 PromptLoom Project
@@ -44,6 +48,8 @@ INDEX
 9.1 Public API Documentation  
 9.2 File-Level Change Logs  
 9.3 Code Style Normalization  
+9.5 Versioning Policy  
+9.4 Verbosity, Feedback
 
 10. Dependencies and Tooling  
 10.1 Dependency Modifications  
@@ -158,6 +164,13 @@ Each edited file shall contain a rolling change log at the very top, containing 
 
 9.3 Code Style Normalization  
 Agents shall normalize style, formatting, and patterns in files they edit.
+
+9.5 Versioning Policy  
+All versioning rules are defined in docs/versioning.md and must be followed for version updates, branch naming, and build metadata.
+
+9.4 Verbosity, Feedback
+Agents shall frequently provide feedback to the user on how it is progressing, what challeneges it is facing, and what it is working on. The user shall never be left in the dark for more than a couple minutes as to what is happening.
+
 
 10. DEPENDENCIES AND TOOLING
 

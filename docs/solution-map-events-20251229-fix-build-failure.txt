@@ -1,0 +1,22 @@
+CHANGE LOG
+- 2025-12-29 | Request: solution map reference files | Added generated reference map.
+Solution: PromptLoom.sln
+File: Models\CategoryModels.cs
+  Class: CategoryModel
+    Event: PropertyChanged
+  Class: PromptEntryModel
+    Event: PropertyChanged
+  Class: SubCategoryModel
+    Event: PropertyChanged
+File: ViewModels\MainViewModel.cs
+  Class: MainViewModel
+    Event: PropertyChanged
+File: ViewModels\RecentSwarmBatchViewModel.cs
+  Class: RecentSwarmBatchViewModel
+    Event: PropertyChanged
+File: ViewModels\RecentSwarmImageViewModel.cs
+  Class: RecentSwarmImageViewModel
+    Event: PropertyChanged
+File: ViewModels\RelayCommand.cs
+  Class: RelayCommand
+    Event: CanExecuteChanged
