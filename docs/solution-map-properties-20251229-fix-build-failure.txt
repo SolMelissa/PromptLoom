@@ -1,0 +1,261 @@
+CHANGE LOG
+- 2025-12-29 | Request: solution map reference files | Added generated reference map.
+Solution: PromptLoom.sln
+File: Controls\RecentBatchTemplateSelector.cs
+  Class: RecentBatchTemplateSelector
+    Property: CardBatchTemplate
+    Property: SmallBatchTemplate
+File: External\SwarmUi.Client\Models\GenerateText2ImageRequest.cs
+  Class: GenerateText2ImageRequest
+    Property: CfgScale
+    Property: Height
+    Property: Model
+    Property: NegativePrompt
+    Property: Prompt
+    Property: Sampler
+    Property: Seed
+    Property: Steps
+    Property: Width
+File: External\SwarmUi.Client\Models\GenerateText2ImageResponse.cs
+  Class: GenerateText2ImageResponse
+    Property: Image
+    Property: Images
+    Property: NegativePrompt
+    Property: Prompt
+    Property: Seed
+File: External\SwarmUi.Client\Models\SwarmStatus.cs
+  Class: SwarmStatus
+    Property: Detail
+    Property: Status
+File: External\SwarmUi.Client\Models\TestPromptFillRequest.cs
+  Class: TestPromptFillRequest
+    Property: Prompt
+File: External\SwarmUi.Client\Models\TestPromptFillResponse.cs
+  Class: TestPromptFillResponse
+    Property: FilledPrompt
+File: External\SwarmUi.Client\SwarmUiApiErrorException.cs
+  Class: SwarmUiApiErrorException
+    Property: ErrorId
+File: External\SwarmUi.Client\SwarmUiClient.cs
+  Class: SwarmUiClient
+    Property: SessionId
+File: External\SwarmUi.Client\SwarmUiClientOptions.cs
+  Class: SwarmUiClientOptions
+    Property: AutoSession
+    Property: SwarmToken
+    Property: Timeout
+    Property: UserAgent
+File: External\SwarmUi.Client\SwarmUiException.cs
+  Class: SwarmUiException
+    Property: StatusCode
+File: External\SwarmUi.Client\Webhooks\SwarmWebhookPayload.cs
+  Class: SwarmWebhookPayload
+    Property: EventType
+    Property: Image
+    Property: NegativePrompt
+    Property: Prompt
+    Property: Raw
+File: Models\CategoryModels.cs
+  Class: CategoryModel
+    Property: FolderPath
+    Property: IsExpanded
+    Property: IsLocked
+    Property: Name
+    Property: Order
+    Property: Prefix
+    Property: SubCategories
+    Property: Suffix
+  Class: PromptEntryModel
+    Property: Enabled
+    Property: FilePath
+    Property: Name
+    Property: Order
+  Class: SubCategoryModel
+    Property: CurrentEntry
+    Property: Entries
+    Property: EntrySummary
+    Property: FolderPath
+    Property: IsDropTarget
+    Property: IsExpanded
+    Property: IsLocked
+    Property: Name
+    Property: Order
+    Property: Prefix
+    Property: PreviewEntries
+    Property: SelectedEntry
+    Property: Suffix
+    Property: UseAllTxtFiles
+File: Models\Meta.cs
+  Class: CategoryMeta
+    Property: Enabled
+    Property: IsLocked
+    Property: Order
+    Property: Prefix
+    Property: Suffix
+  Class: EntryMeta
+    Property: Enabled
+    Property: Name
+    Property: Order
+  Class: SubCategoryMeta
+    Property: Enabled
+    Property: Entries
+    Property: IsLocked
+    Property: Order
+    Property: Prefix
+    Property: SelectedTxtFile
+    Property: Suffix
+    Property: UseAllTxtFiles
+File: PromptLoom.Tests\Fakes\FakeAppDataStore.cs
+  Class: FakeAppDataStore
+    Property: CategoriesDir
+    Property: OutputDir
+    Property: RootDir
+File: PromptLoom.Tests\Fakes\FakeClipboardService.cs
+  Class: FakeClipboardService
+    Property: LastText
+File: PromptLoom.Tests\Fakes\FakeErrorReporter.cs
+  Class: FakeErrorReporter
+    Property: Entries
+    Property: LatestMessage
+    Property: ReportCount
+    Property: UiEventCount
+File: PromptLoom.Tests\Fakes\FakeProcessService.cs
+  Class: FakeProcessService
+    Property: LastStartInfo
+File: PromptLoom.Tests\Fakes\FakeSwarmUiClient.cs
+  Class: FakeSwarmUiClient
+    Property: LoraCalls
+    Property: Loras
+    Property: ModelCalls
+    Property: Models
+    Property: Status
+    Property: StatusCalls
+File: PromptLoom.Tests\Fakes\FakeUiDialogService.cs
+  Class: FakeUiDialogService
+    Property: LastMessage
+    Property: LastTitle
+File: PromptLoom.Tests\MainViewModelPersistenceTests.cs
+  Class: FakeUserSettingsStore
+    Property: Settings
+File: Services\AppDataStoreAdapter.cs
+  Class: AppDataStoreAdapter
+    Property: CategoriesDir
+    Property: OutputDir
+    Property: RootDir
+File: Services\Clock.cs
+  Class: SystemClock
+    Property: Now
+File: Services\ErrorReporter.cs
+  Class: ErrorReporter
+    Property: Entries
+    Property: LatestMessage
+File: Services\ErrorReporterAdapter.cs
+  Class: ErrorReporterAdapter
+    Property: Entries
+    Property: Inner
+    Property: LatestMessage
+File: Services\SchemaService.cs
+  Class: SchemaService
+    Property: CategoriesDir
+    Property: OutputDir
+    Property: RootDir
+File: Services\UserSettingsStore.cs
+  Class: UserSettings
+    Property: BatchQty
+    Property: BatchRandomizePrompts
+    Property: SendSwarmCfgScale
+    Property: SendSwarmLoras
+    Property: SendSwarmModelOverride
+    Property: SendSwarmSteps
+    Property: SwarmCfgScale
+    Property: SwarmLora1Weight
+    Property: SwarmLora2Weight
+    Property: SwarmSelectedLora1
+    Property: SwarmSelectedLora2
+    Property: SwarmSelectedModel
+    Property: SwarmSteps
+    Property: SwarmToken
+    Property: SwarmUrl
+  Class: UserSettingsStore
+    Property: SettingsPath
+File: ViewModels\MainViewModel.cs
+  Class: MainViewModel
+    Property: CanEditSwarmCfgScale
+    Property: CanEditSwarmLoras
+    Property: CanEditSwarmModelOverride
+    Property: CanEditSwarmSteps
+    Property: Categories
+    Property: CopyCommand
+    Property: ErrorEntries
+    Property: HideImageOverlayCommand
+    Property: MoveCategoryDownCommand
+    Property: MoveCategoryUpCommand
+    Property: MoveEntryDownCommand
+    Property: MoveEntryUpCommand
+    Property: MoveSubCategoryDownCommand
+    Property: MoveSubCategoryUpCommand
+    Property: OpenEntryFileCommand
+    Property: OpenFolderCommand
+    Property: OpenSwarmUiCommand
+    Property: OverlayNextCommand
+    Property: OverlayPrevCommand
+    Property: PromptText
+    Property: RandomizeCategoryOnceCommand
+    Property: RandomizeCommand
+    Property: RandomizeSubCategoryOnceCommand
+    Property: RecentBatches
+    Property: RefreshSwarmLorasCommand
+    Property: RefreshSwarmModelsCommand
+    Property: ReloadCommand
+    Property: RestoreOriginalCategoriesCommand
+    Property: SaveCommand
+    Property: SaveEntryFileCommand
+    Property: SaveOutputCommand
+    Property: SelectAllEntriesCommand
+    Property: SelectAllSubCategoriesCommand
+    Property: SelectEntryCommand
+    Property: SelectNoneEntriesCommand
+    Property: SelectNoneSubCategoriesCommand
+    Property: SelectSubCategoryCommand
+    Property: SelectedSubCategoryEntrySummary
+    Property: SelectedSubCategoryPreview
+    Property: SendBatchToSwarmUiCommand
+    Property: SendToSwarmUiCommand
+    Property: ShowImageOverlayCommand
+    Property: SwarmLoras
+    Property: SwarmModels
+    Property: SystemMessages
+    Property: TestSwarmConnectionCommand
+    Property: ToggleOverlayDetailsCommand
+File: ViewModels\RecentSwarmBatchViewModel.cs
+  Class: RecentSwarmBatchViewModel
+    Property: BatchId
+    Property: CreatedAt
+    Property: IsCard
+    Property: Items
+    Property: Prompt
+    Property: SettingsSummary
+    Property: Title
+File: ViewModels\RecentSwarmImageViewModel.cs
+  Class: RecentSwarmImageViewModel
+    Property: CanCancel
+    Property: CancelCommand
+    Property: CfgScale
+    Property: HasThumbnail
+    Property: IsCancelled
+    Property: IsComplete
+    Property: IsFailed
+    Property: IsGenerating
+    Property: IsIndeterminate
+    Property: LorasSummary
+    Property: Model
+    Property: Progress
+    Property: ProgressPercent
+    Property: Prompt
+    Property: Seed
+    Property: Status
+    Property: Steps
+    Property: Thumbnail
+File: ViewModels\RelayCommand.cs
+  Class: RelayCommand
+    Property: Name
