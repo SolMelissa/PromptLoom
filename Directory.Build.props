@@ -1,5 +1,6 @@
 <!--
 CHANGE LOG
+- 2025-12-30 | Fix: Avoid WPF temp assembly dupes | Disable assembly info generation for WPF temporary projects.
 - 2025-12-30 | Request: Bump base version | Updated BaseVersion to 2.0.0.
 - 2025-12-29 | Request: Centralize versioning rules | Added versioning defaults and assembly metadata settings.
 - 2025-12-29 | Request: Build failure (MSB4276 workload SDK resolver) | Disabled workload resolver at solution scope.
@@ -8,6 +9,7 @@ CHANGE LOG
   <PropertyGroup>
     <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateAssemblyInfo Condition="'$(IsWpfTemporaryProject)' == 'true'">false</GenerateAssemblyInfo>
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
