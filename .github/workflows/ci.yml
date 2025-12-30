@@ -1,0 +1,26 @@
+# CHANGE LOG
+# - 2025-12-30 | Request: Add CI preflight | Added Windows CI build with git ACL preflight.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preflight git ACL
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\preflight-git-acl.ps1
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build .\PromptLoom.sln /p:BaseVersion=0.0.0 /p:ChangeMade=chore.ci

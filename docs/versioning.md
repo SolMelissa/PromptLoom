@@ -1,4 +1,6 @@
 CHANGE LOG
+- 2025-12-30 | Request: Document unversioned override | Added explicit AllowUnversionedBranch guidance.
+- 2025-12-30 | Review: Document detached HEAD exception | Allow explicit version metadata on detached HEAD checkouts.
 - 2025-12-29 | Request: Clarify branch exceptions | Documented main/dev handling for ChangeMade.
 - 2025-12-29 | Request: Create versioning policy | Added versioning rules and branch conventions.
 
@@ -28,6 +30,8 @@ Derivation:
 - main and dev are allowed exceptions and set CHANGEMADE to chore.main or chore.dev.
 - Build must fail if branch name does not match the required format.
 - On failure, prompt for user input to supply CHANGEMADE.
+- Detached HEAD builds are allowed only when BaseVersion and ChangeMade are explicitly provided.
+- Explicit builds on non-conforming branches require BaseVersion, ChangeMade, and AllowUnversionedBranch=true.
 
 ## Version Bump Rules
 - MAJOR: breaking changes or incompatible data format
