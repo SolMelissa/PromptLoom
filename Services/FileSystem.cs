@@ -33,14 +33,44 @@ public interface IFileSystem
     string ReadAllText(string path);
 
     /// <summary>
+    /// Reads all lines from a file.
+    /// </summary>
+    string[] ReadAllLines(string path);
+
+    /// <summary>
     /// Writes all text to a file, creating it if needed.
     /// </summary>
     void WriteAllText(string path, string contents);
 
     /// <summary>
+    /// Appends text to a file, creating it if needed.
+    /// </summary>
+    void AppendAllText(string path, string contents);
+
+    /// <summary>
+    /// Deletes a file if it exists.
+    /// </summary>
+    void DeleteFile(string path);
+
+    /// <summary>
+    /// Deletes a directory.
+    /// </summary>
+    void DeleteDirectory(string path, bool recursive);
+
+    /// <summary>
+    /// Copies a file.
+    /// </summary>
+    void CopyFile(string sourceFileName, string destFileName, bool overwrite);
+
+    /// <summary>
     /// Returns subdirectories within the specified directory.
     /// </summary>
     IEnumerable<string> GetDirectories(string path);
+
+    /// <summary>
+    /// Enumerates subdirectories within the specified directory.
+    /// </summary>
+    IEnumerable<string> EnumerateDirectories(string path);
 
     /// <summary>
     /// Returns files matching the search pattern.
@@ -56,6 +86,11 @@ public interface IFileSystem
     /// Enumerates files matching the search pattern.
     /// </summary>
     IEnumerable<string> EnumerateFiles(string path, string searchPattern, SearchOption searchOption);
+
+    /// <summary>
+    /// Returns the parent directory path, or null if none.
+    /// </summary>
+    string? GetParentDirectory(string path);
 }
 
 /// <summary>
@@ -76,10 +111,33 @@ public sealed class FileSystem : IFileSystem
     public string ReadAllText(string path) => File.ReadAllText(path);
 
     /// <inheritdoc/>
+    public string[] ReadAllLines(string path) => File.ReadAllLines(path);
+
+    /// <inheritdoc/>
     public void WriteAllText(string path, string contents) => File.WriteAllText(path, contents);
 
     /// <inheritdoc/>
+    public void AppendAllText(string path, string contents) => File.AppendAllText(path, contents);
+
+    /// <inheritdoc/>
+    public void DeleteFile(string path)
+    {
+        if (File.Exists(path))
+            File.Delete(path);
+    }
+
+    /// <inheritdoc/>
+    public void DeleteDirectory(string path, bool recursive) => Directory.Delete(path, recursive);
+
+    /// <inheritdoc/>
+    public void CopyFile(string sourceFileName, string destFileName, bool overwrite)
+        => File.Copy(sourceFileName, destFileName, overwrite);
+
+    /// <inheritdoc/>
     public IEnumerable<string> GetDirectories(string path) => Directory.GetDirectories(path);
+
+    /// <inheritdoc/>
+    public IEnumerable<string> EnumerateDirectories(string path) => Directory.EnumerateDirectories(path);
 
     /// <inheritdoc/>
     public IEnumerable<string> GetFiles(string path, string searchPattern, SearchOption searchOption)
@@ -92,4 +150,7 @@ public sealed class FileSystem : IFileSystem
     /// <inheritdoc/>
     public IEnumerable<string> EnumerateFiles(string path, string searchPattern, SearchOption searchOption)
         => Directory.EnumerateFiles(path, searchPattern, searchOption);
+
+    /// <inheritdoc/>
+    public string? GetParentDirectory(string path) => Directory.GetParent(path)?.FullName;
 }

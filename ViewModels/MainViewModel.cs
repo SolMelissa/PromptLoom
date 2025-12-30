@@ -69,7 +69,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IFileSystem _fileSystem;
     private readonly IAppDataStore _appDataStore;
     private readonly IUserSettingsStore _settingsStore;
-    private readonly ISwarmUiClientFactory _swarmClientFactory;
+    private readonly IAppSwarmUiService _swarmService;
 
     private readonly IErrorReporter _errors;
 
@@ -496,8 +496,8 @@ private string _promptText = "";
     public RelayCommand SendToSwarmUiCommand { get; }
     public RelayCommand SendBatchToSwarmUiCommand { get; }
     public RelayCommand RandomizeCommand { get; }
-    public RelayCommand TestSwarmConnectionCommand { get; }
-    public RelayCommand RefreshSwarmModelsCommand { get; }
+    public AsyncRelayCommand TestSwarmConnectionCommand { get; }
+    public AsyncRelayCommand RefreshSwarmModelsCommand { get; }
     public RelayCommand RefreshSwarmLorasCommand { get; }
     public RelayCommand ShowImageOverlayCommand { get; }
     public RelayCommand HideImageOverlayCommand { get; }
@@ -536,8 +536,8 @@ private string _promptText = "";
         Reload();
 
         // Load Swarm server metadata on startup (best effort).
-        // Runs async void methods which update observable collections on the UI thread.
-        RefreshSwarmModels();
+        // Fire-and-forget async methods which update observable collections on the UI thread.
+        _ = RefreshSwarmModels();
         RefreshSwarmLoras();
     }
 
@@ -549,6 +549,7 @@ private string _promptText = "";
         IAppDataStore? appDataStore = null,
         IUserSettingsStore? settingsStore = null,
         ISwarmUiClientFactory? swarmClientFactory = null,
+        IAppSwarmUiService? swarmService = null,
         IErrorReporter? errorReporter = null,
         IWildcardFileReader? fileReader = null,
         IClock? clock = null,
@@ -565,7 +566,8 @@ private string _promptText = "";
         _fileSystem = fileSystem ?? new FileSystem();
         _appDataStore = appDataStore ?? new AppDataStoreAdapter();
         _settingsStore = settingsStore ?? new UserSettingsStore(_fileSystem, _appDataStore);
-        _swarmClientFactory = swarmClientFactory ?? new SwarmUiClientFactory();
+        var resolvedSwarmFactory = swarmClientFactory ?? new SwarmUiClientFactory();
+        _swarmService = swarmService ?? new SwarmUiService(resolvedSwarmFactory);
         _fileReader = fileReader ?? new WildcardFileReader();
         _clock = clock ?? new SystemClock();
         _randomSource = randomSource ?? new SystemRandomSource();
@@ -593,8 +595,8 @@ private string _promptText = "";
         SendToSwarmUiCommand = new RelayCommand("SendToSwarmUi", _ => SendToSwarmUi(), errorReporter: _errors);
         SendBatchToSwarmUiCommand = new RelayCommand("SendBatchToSwarmUi", _ => SendBatchToSwarmUi(), errorReporter: _errors);
         RandomizeCommand = new RelayCommand("Randomize", _ => Randomize(), errorReporter: _errors);
-        TestSwarmConnectionCommand = new RelayCommand("TestSwarmConnection", _ => TestSwarmConnection(), errorReporter: _errors);
-        RefreshSwarmModelsCommand = new RelayCommand("RefreshSwarmModels", _ => RefreshSwarmModels(), errorReporter: _errors);
+        TestSwarmConnectionCommand = new AsyncRelayCommand("TestSwarmConnection", _ => TestSwarmConnection(), errorReporter: _errors);
+        RefreshSwarmModelsCommand = new AsyncRelayCommand("RefreshSwarmModels", _ => RefreshSwarmModels(), errorReporter: _errors);
         RefreshSwarmLorasCommand = new RelayCommand("RefreshSwarmLoras", _ => RefreshSwarmLoras(), errorReporter: _errors);
         ShowImageOverlayCommand = new RelayCommand("ShowImageOverlay", p => ShowImageOverlay(p), errorReporter: _errors);
         HideImageOverlayCommand = new RelayCommand("HideImageOverlay", _ => HideImageOverlay(), errorReporter: _errors);
@@ -1291,8 +1293,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
 
         try
         {
-            if (!Uri.TryCreate(SwarmUrl, UriKind.Absolute, out var baseUri))
-                throw new InvalidOperationException($"Invalid SwarmUrl: '{SwarmUrl}'. Expected something like http://127.0.0.1:7801");
+            var baseUri = _swarmService.GetBaseUri(SwarmUrl);
 
             cts = new CancellationTokenSource();
 
@@ -1306,8 +1307,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 {
                     try
                     {
-                        var cancelClient = BuildSwarmClient(baseUri);
-                        await cancelClient.InterruptAllAsync(otherSessions: false, ct: CancellationToken.None).ConfigureAwait(false);
+                        await _swarmService.InterruptAllAsync(SwarmUrl, SwarmToken, otherSessions: false, ct: CancellationToken.None).ConfigureAwait(false);
                     }
                     catch { /* best effort */ }
                 });
@@ -1330,8 +1330,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
             item.Thumbnail = ThumbnailRenderer.RenderPromptThumbnail(promptSnapshot);
             _dispatcher.Invoke(() => batch.Items.Add(item));
 
-            var client = BuildSwarmClient(baseUri);
-            var (suggestedModel, w, h) = await client.GetSuggestedModelAndResolutionAsync(cts.Token).ConfigureAwait(false);
+            var (suggestedModel, w, h) = await _swarmService.GetSuggestedModelAndResolutionAsync(SwarmUrl, SwarmToken, cts.Token).ConfigureAwait(false);
 
             // Model override is optional, but the API still needs *a* model.
             var modelToUse = suggestedModel;
@@ -1362,7 +1361,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 }
             };
 
-            await foreach (var frame in client.GenerateText2ImageStreamAsync(req, cts.Token).ConfigureAwait(false))
+            await foreach (var frame in _swarmService.GenerateText2ImageStreamAsync(SwarmUrl, SwarmToken, req, cts.Token).ConfigureAwait(false))
             {
                 if (cts.IsCancellationRequested) break;
 
@@ -1519,9 +1518,6 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         }
     }
 
-    private IAppSwarmUiClient BuildSwarmClient(Uri baseUri)
-        => _swarmClientFactory.Create(baseUri, SwarmToken);
-
     private void AddRecentBatch(RecentSwarmBatchViewModel batch)
     {
         // Keep a small rolling history for the Prompt tab history.
@@ -1593,15 +1589,11 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
 
     
 
-    internal async void TestSwarmConnection()
+    internal async Task TestSwarmConnection()
     {
         try
         {
-            if (!Uri.TryCreate(SwarmUrl, UriKind.Absolute, out var baseUri))
-                throw new InvalidOperationException($"Invalid SwarmUrl: '{SwarmUrl}'.");
-
-            var client = BuildSwarmClient(baseUri);
-            var status = await client.GetCurrentStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            var status = await _swarmService.GetStatusAsync(SwarmUrl, SwarmToken, CancellationToken.None).ConfigureAwait(false);
 
 	            _dispatcher.Invoke(() =>
             {
@@ -1618,17 +1610,13 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
         }
     }
 
-    internal async void RefreshSwarmModels()
+    internal async Task RefreshSwarmModels()
     {
         try
         {
-            if (!Uri.TryCreate(SwarmUrl, UriKind.Absolute, out var baseUri))
-                throw new InvalidOperationException($"Invalid SwarmUrl: '{SwarmUrl}'.");
-
             SwarmUiStatusText = "Loading models...";
 
-            var client = BuildSwarmClient(baseUri);
-            var models = await client.ListStableDiffusionModelsAsync(depth: 8, ct: CancellationToken.None).ConfigureAwait(false);
+            var models = await _swarmService.ListModelsAsync(SwarmUrl, SwarmToken, depth: 8, ct: CancellationToken.None).ConfigureAwait(false);
 
             _dispatcher.Invoke(() =>
             {
@@ -1661,13 +1649,9 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
     {
         try
         {
-            if (!Uri.TryCreate(SwarmUrl, UriKind.Absolute, out var baseUri))
-                throw new InvalidOperationException($"Invalid SwarmUrl: '{SwarmUrl}'.");
-
             SwarmUiStatusText = "Loading LoRAs...";
 
-            var client = BuildSwarmClient(baseUri);
-            var loras = await client.ListLorasAsync(depth: 8, ct: CancellationToken.None).ConfigureAwait(false);
+            var loras = await _swarmService.ListLorasAsync(SwarmUrl, SwarmToken, depth: 8, ct: CancellationToken.None).ConfigureAwait(false);
 
             _dispatcher.Invoke(() =>
             {
