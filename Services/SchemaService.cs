@@ -11,7 +11,43 @@ using PromptLoom.Models;
 
 namespace PromptLoom.Services;
 
-public sealed class SchemaService
+/// <summary>
+/// Abstraction for schema load/save and base folder access.
+/// </summary>
+public interface ISchemaService
+{
+    /// <summary>
+    /// Root directory for schema content.
+    /// </summary>
+    string RootDir { get; }
+
+    /// <summary>
+    /// Categories directory.
+    /// </summary>
+    string CategoriesDir { get; }
+
+    /// <summary>
+    /// Output directory.
+    /// </summary>
+    string OutputDir { get; }
+
+    /// <summary>
+    /// Ensures base folders exist.
+    /// </summary>
+    void EnsureBaseFolders();
+
+    /// <summary>
+    /// Loads categories from disk.
+    /// </summary>
+    List<CategoryModel> Load();
+
+    /// <summary>
+    /// Saves categories to disk.
+    /// </summary>
+    void Save(IEnumerable<CategoryModel> categories);
+}
+
+public sealed class SchemaService : ISchemaService
 {
     public static readonly string[] DefaultCategories =
         ["Subject", "Setting", "Clothing", "Style", "Camera", "Lighting", "Composition", "Quality"];
