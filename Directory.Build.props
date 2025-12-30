@@ -1,5 +1,6 @@
 <!--
 CHANGE LOG
+- 2025-12-30 | Request: Bump base version | Updated BaseVersion to 2.0.0.
 - 2025-12-29 | Request: Centralize versioning rules | Added versioning defaults and assembly metadata settings.
 - 2025-12-29 | Request: Build failure (MSB4276 workload SDK resolver) | Disabled workload resolver at solution scope.
 -->
@@ -11,6 +12,6 @@ CHANGE LOG
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-    <BaseVersion Condition="'$(BaseVersion)' == ''">1.8.2</BaseVersion>
+    <BaseVersion Condition="'$(BaseVersion)' == ''">2.0.0</BaseVersion>
   </PropertyGroup>
 </Project>

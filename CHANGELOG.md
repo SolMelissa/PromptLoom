@@ -1,4 +1,10 @@
+CHANGE LOG
+- 2025-12-30 | Request: Bump major version | Added 2.0.0 entry.
+
 # PromptLoom Changelog
+## 2.0.0
+- Version reset to 2.0.0 for the Codex CLI and GitHub era.
+
 ## 1.8.0.5
 - UI: Prompt tab now shows a generation progress indicator + status message while SwarmUI generation is in-flight.
 - UI: Prompt tab now shows a preview of the most recently generated image (best-effort download from the SwarmUI response).
