@@ -1,5 +1,7 @@
 <!--
 CHANGE LOG
+- 2025-12-31 | Request: Exclude referenced project sources | Prevented compiling SwarmUi.Client sources in the app project glob.
+- 2025-12-31 | Request: Prevent nested obj/bin compile | Excluded **\obj\** and **\bin\** from compile and item excludes to avoid duplicate assembly info.
 - 2025-12-29 | Request: Centralize versioning | Removed local version metadata and rely on Directory.Build.props.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
@@ -23,7 +25,7 @@ CHANGE LOG
 
     <!-- Build hardening: never accidentally compile or include stale generated output
          when building from a source zip/folder. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;**\bin\**;**\obj\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,6 +42,6 @@ CHANGE LOG
 
   <ItemGroup>
     <!-- Build fix: exclude test sources from the app project to avoid pulling xUnit references into WPF builds. -->
-    <Compile Include="**\*.cs" Exclude="External\**\*.cs;bin\**;obj\**;PromptLoom.Tests\**\*.cs" />
+    <Compile Include="**\*.cs" Exclude="External\**\*.cs;bin\**;obj\**;**\bin\**;**\obj\**;PromptLoom.Tests\**\*.cs;SwarmUi.Client\**\*.cs" />
   </ItemGroup>
 </Project>

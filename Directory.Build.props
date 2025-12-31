@@ -1,5 +1,6 @@
 <!--
 CHANGE LOG
+- 2025-12-31 | Request: Bug fix version bump | Updated BaseVersion to 2.0.1.
 - 2025-12-30 | Fix: Detect WPF temp project names | Disable assembly info when MSBuildProjectName ends with _wpftmp.
 - 2025-12-30 | Fix: Avoid WPF temp assembly dupes | Disable assembly info generation for WPF temporary projects.
 - 2025-12-30 | Request: Bump base version | Updated BaseVersion to 2.0.0.
@@ -15,6 +16,6 @@ CHANGE LOG
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-    <BaseVersion Condition="'$(BaseVersion)' == ''">2.0.0</BaseVersion>
+    <BaseVersion Condition="'$(BaseVersion)' == ''">2.0.1</BaseVersion>
   </PropertyGroup>
 </Project>
