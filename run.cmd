@@ -1,5 +1,6 @@
 @echo off
 REM CHANGE LOG
+REM - 2025-12-31 | Request: MVVM split | Run the PromptLoom.View project explicitly.
 REM - 2025-12-30 | Request: Add git ACL preflight | Run git ACL preflight before restore/run.
 
 setlocal
@@ -15,7 +16,7 @@ dotnet restore
 if errorlevel 1 goto :err
 
 echo PromptLoom: dotnet run
-dotnet run
+dotnet run --project "%~dp0PromptLoom.View\\PromptLoom.View.csproj"
 if errorlevel 1 goto :err
 
 echo.

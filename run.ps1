@@ -1,4 +1,5 @@
 # CHANGE LOG
+# - 2025-12-31 | Request: MVVM split | Run the PromptLoom.View project explicitly.
 # - 2025-12-30 | Request: Add git ACL preflight | Run git ACL preflight before restore/run.
 
 $ErrorActionPreference = 'Stop'
@@ -16,4 +17,4 @@ if ($LASTEXITCODE -ne 0) { throw "git ACL preflight failed" }
 dotnet restore
 if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed" }
 
-dotnet run
+dotnet run --project (Join-Path $root 'PromptLoom.View\PromptLoom.View.csproj')

@@ -1,3 +1,5 @@
+@REM CHANGE LOG
+@REM - 2025-12-31 | Request: MVVM split | Run the PromptLoom.View project explicitly.
 @echo off
 setlocal
 cd /d %~dp0
@@ -10,7 +12,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-dotnet run
+dotnet run --project "%~dp0PromptLoom.View\\PromptLoom.View.csproj"
 
 
 echo.

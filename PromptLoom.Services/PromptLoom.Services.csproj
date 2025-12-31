@@ -1,0 +1,23 @@
+<!--
+CHANGE LOG
+- 2025-12-31 | Fix: Exclude nested bin/obj | Prevent SwarmUi.Client generated files from compiling in Services.
+- 2025-12-31 | Request: MVVM split | Rename Infrastructure project to Services and host shared services + SwarmUi client.
+- 2025-12-28 | Step 1 scaffolding | Add Infrastructure project container.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PromptLoom.Model\PromptLoom.Model.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

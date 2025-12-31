@@ -3,15 +3,17 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom", "PromptLoom.csproj", "{ECE08EE2-D457-4ABE-81F2-99B39DECF988}"
+# CHANGE LOG
+# - 2025-12-31 | Request: MVVM split | Rename projects and add ViewModel/Model/Services layout.
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.View", "PromptLoom.View\\PromptLoom.View.csproj", "{ECE08EE2-D457-4ABE-81F2-99B39DECF988}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.Tests", "PromptLoom.Tests\PromptLoom.Tests.csproj", "{E212397C-95A5-4662-A1FF-D01F387676FB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.Domain", "PromptLoom.Domain\PromptLoom.Domain.csproj", "{3D65DF05-9574-45AE-99B9-B30C7A8E7A6C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.Model", "PromptLoom.Model\\PromptLoom.Model.csproj", "{3D65DF05-9574-45AE-99B9-B30C7A8E7A6C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.Infrastructure", "PromptLoom.Infrastructure\PromptLoom.Infrastructure.csproj", "{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.Services", "PromptLoom.Services\\PromptLoom.Services.csproj", "{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SwarmUi.Client", "SwarmUi.Client\SwarmUi.Client.csproj", "{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PromptLoom.ViewModel", "PromptLoom.ViewModel\\PromptLoom.ViewModel.csproj", "{70D08199-56D1-4654-B3A8-D0B63EB572C0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -38,9 +40,9 @@ Global
 		{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{35707C27-CC5C-44B4-AD65-D15AEE4F33CF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3B51122F-8D7E-4069-AB28-C5A6A8E354B0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{70D08199-56D1-4654-B3A8-D0B63EB572C0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{70D08199-56D1-4654-B3A8-D0B63EB572C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{70D08199-56D1-4654-B3A8-D0B63EB572C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{70D08199-56D1-4654-B3A8-D0B63EB572C0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

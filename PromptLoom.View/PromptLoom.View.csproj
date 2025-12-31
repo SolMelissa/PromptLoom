@@ -1,5 +1,6 @@
 <!--
 CHANGE LOG
+- 2025-12-31 | Request: MVVM split | Rename app project to PromptLoom.View and update project references/paths.
 - 2025-12-31 | Request: Exclude referenced project sources | Prevented compiling SwarmUi.Client sources in the app project glob.
 - 2025-12-31 | Request: Prevent nested obj/bin compile | Excluded **\obj\** and **\bin\** from compile and item excludes to avoid duplicate assembly info.
 - 2025-12-29 | Request: Centralize versioning | Removed local version metadata and rely on Directory.Build.props.
@@ -30,18 +31,18 @@ CHANGE LOG
 
   <ItemGroup>
     <!-- Copy sample/user categories into the build output so the app can find them when run from bin/Debug or a published folder. -->
-    <Content Include="Categories\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Categories\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- SwarmUI bridge library (source included for easy zip distribution). -->
-    <ProjectReference Include="PromptLoom.Domain\PromptLoom.Domain.csproj" />
-    <ProjectReference Include="PromptLoom.Infrastructure\PromptLoom.Infrastructure.csproj" />
-    <ProjectReference Include="SwarmUi.Client\SwarmUi.Client.csproj" />
+    <!-- MVVM split: reference model, viewmodel, and services projects. -->
+    <ProjectReference Include="..\PromptLoom.Model\PromptLoom.Model.csproj" />
+    <ProjectReference Include="..\PromptLoom.ViewModel\PromptLoom.ViewModel.csproj" />
+    <ProjectReference Include="..\PromptLoom.Services\PromptLoom.Services.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Build fix: exclude test sources from the app project to avoid pulling xUnit references into WPF builds. -->
-    <Compile Include="**\*.cs" Exclude="External\**\*.cs;bin\**;obj\**;**\bin\**;**\obj\**;PromptLoom.Tests\**\*.cs;SwarmUi.Client\**\*.cs" />
+    <Compile Include="**\*.cs" Exclude="External\**\*.cs;bin\**;obj\**;**\bin\**;**\obj\**;PromptLoom.Tests\**\*.cs" />
   </ItemGroup>
 </Project>
