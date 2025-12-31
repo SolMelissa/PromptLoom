@@ -1,3 +1,7 @@
+<!--
+CHANGE LOG
+- 2025-12-31 | Request: MVVM split | Update test project references to ViewModel/Model/Services.
+-->
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
@@ -21,7 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PromptLoom.csproj" />
+    <ProjectReference Include="..\PromptLoom.Model\PromptLoom.Model.csproj" />
+    <ProjectReference Include="..\PromptLoom.Services\PromptLoom.Services.csproj" />
+    <ProjectReference Include="..\PromptLoom.ViewModel\PromptLoom.ViewModel.csproj" />
   </ItemGroup>
 
 </Project>

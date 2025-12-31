@@ -1,3 +1,7 @@
+// CHANGE LOG
+// - 2026-03-02 | Fix: Restore AutoSave helper | Reintroduce AutoSave to funnel into the debounced queue.
+// - 2025-12-31 | Request: MVVM split | Update project root sentinel to PromptLoom.View.csproj.
+// - 2025-12-25 | Fix: UI side-effect wrappers | Inject UI service wrappers for testable side effects.
 // FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
 // CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
 // CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
@@ -709,9 +713,13 @@ private string _promptText = "";
             // Strong signals we are at the app root.
             // When running from an extracted release zip, Categories lives next to the exe.
             // When running under dotnet run, Categories lives at the project root and we need to walk upward.
-            var csproj = Path.Combine(current, "PromptLoom.csproj");
+            var csproj = Path.Combine(current, "PromptLoom.View.csproj");
             if (_fileSystem.FileExists(csproj))
-                return current;
+            {
+                var categoriesAtProject = Path.Combine(current, "Categories");
+                if (_fileSystem.DirectoryExists(categoriesAtProject))
+                    return current;
+            }
 
             var categoriesDir = Path.Combine(current, "Categories");
             if (_fileSystem.DirectoryExists(categoriesDir))
