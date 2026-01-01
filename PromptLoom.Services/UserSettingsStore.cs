@@ -1,3 +1,6 @@
+// CHANGE LOG
+// - 2025-12-31 | Request: Persist SwarmUI toggles | Store send-seed toggle and SwarmUI selections.
+// - 2025-12-25 | Fix: User settings store seam | Add IUserSettingsStore and a default implementation.
 // FIX: Introduce user settings store seam to allow in-memory testing.
 // CAUSE: MainViewModel read/wrote user_settings.json directly.
 // CHANGE: Add IUserSettingsStore and a default implementation. 2025-12-25
@@ -75,6 +78,8 @@ public sealed class UserSettings
 
     public bool SendSwarmCfgScale { get; set; }
     public double SwarmCfgScale { get; set; }
+
+    public bool SendSwarmSeed { get; set; } = true;
 
     public bool SendSwarmLoras { get; set; }
     public string? SwarmSelectedLora1 { get; set; }

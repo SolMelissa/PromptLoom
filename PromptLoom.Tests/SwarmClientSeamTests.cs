@@ -1,3 +1,5 @@
+// CHANGE LOG
+// - 2025-12-31 | Request: SwarmUI cards | Assert against model/LoRA card names.
 // TEST: Validate SwarmUI seam integration via injected factory and error reporter.
 
 using PromptLoom.Tests.Fakes;
@@ -26,8 +28,8 @@ public class SwarmClientSeamTests
 
         vm.RefreshSwarmModels();
 
-        Assert.Contains("ModelA", vm.SwarmModels);
-        Assert.Contains("ModelB", vm.SwarmModels);
+        Assert.Contains(vm.SwarmModels, m => m.Name == "ModelA");
+        Assert.Contains(vm.SwarmModels, m => m.Name == "ModelB");
     }
 
     /// <summary>
@@ -46,7 +48,7 @@ public class SwarmClientSeamTests
 
         vm.RefreshSwarmLoras();
 
-        Assert.Contains("LoraA", vm.SwarmLoras);
-        Assert.Contains("LoraB", vm.SwarmLoras);
+        Assert.Contains(vm.SwarmLoras, l => l.Name == "LoraA");
+        Assert.Contains(vm.SwarmLoras, l => l.Name == "LoraB");
     }
 }

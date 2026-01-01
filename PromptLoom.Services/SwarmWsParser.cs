@@ -1,3 +1,7 @@
+// CHANGE LOG
+// - 2025-12-31 | Request: Show step progress | Extract step/total step counts from SwarmUI frames.
+// - 2025-12-22 | Fix: Parse SwarmUI progress frames | Extract status/progress/preview/final image refs.
+// - 2025-12-22 | Fix: Tolerant websocket parsing | Support varied SwarmUI JSON schemas.
 /*
 FIX: Parse SwarmUI GenerateText2ImageWS progress frames for UI updates.
 CAUSE: SwarmUI websocket message shapes vary across versions; hardcoding a single schema breaks easily.
@@ -14,12 +18,16 @@ public static class SwarmWsParser
         string json,
         out string? status,
         out double? progress01,
+        out int? step,
+        out int? steps,
         out string? previewDataUrl,
         out string? finalImageRef,
         out long? seed)
     {
         status = null;
         progress01 = null;
+        step = null;
+        steps = null;
         previewDataUrl = null;
         finalImageRef = null;
         seed = null;
@@ -39,10 +47,11 @@ public static class SwarmWsParser
                 TryGetString(root, "detail") ??
                 TryGetString(root, "stage");
 
-            // Progress: try percent, progress, step/steps, etc.
+            // Progress: try percent/progress or derive from step counts.
+            TryGetStepData(root, out step, out steps);
             progress01 =
                 TryGetProgress(root) ??
-                TryGetProgressFromSteps(root);
+                TryGetProgressFromSteps(step, steps);
 
             // Preview image: usually data url or base64
             previewDataUrl =
@@ -121,15 +130,15 @@ public static class SwarmWsParser
         return null;
     }
 
-    private static double? TryGetProgressFromSteps(JsonElement root)
+    private static void TryGetStepData(JsonElement root, out int? step, out int? steps)
     {
         // step / steps or current_step / total_steps
-        int? step = null;
-        int? steps = null;
-
         step = TryGetInt(root, "step") ?? TryGetInt(root, "current_step") ?? TryGetInt(root, "cur_step");
         steps = TryGetInt(root, "steps") ?? TryGetInt(root, "total_steps") ?? TryGetInt(root, "max_steps");
+    }
 
+    private static double? TryGetProgressFromSteps(int? step, int? steps)
+    {
         if (step is not null && steps is not null && steps.Value > 0)
             return (double)step.Value / steps.Value;
 
