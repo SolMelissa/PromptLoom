@@ -1,10 +1,14 @@
+<!-- ChangeLog: 2026-01-02 | Request: Patch version bump | Update app version to 1.8.2.9. -->
+<!-- ChangeLog: 2026-01-02 | Request: Tag search storage | Add SQLite + FTS5 packages. -->
+<!-- ChangeLog: 2026-01-02 | Fix: Exclude nested bin/obj | Prevent stale generated files from compiling. -->
+<!-- ChangeLog: 2026-01-02 | Fix: Exclude SwarmUi.Client sources | Avoid duplicate types and missing usings. -->
 <!-- ChangeLog: 2025-12-28 | Step 2 extraction | Repoint SwarmUi.Client project reference. -->
 <!-- ChangeLog: 2025-12-28 | Step 1 scaffolding | Add references for new project layout. -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <AssemblyVersion>1.8.2.6</AssemblyVersion>
-    <FileVersion>1.8.2.6</FileVersion>
-    <Version>1.8.2.8</Version>
+    <AssemblyVersion>1.8.2.9</AssemblyVersion>
+    <FileVersion>1.8.2.9</FileVersion>
+    <Version>1.8.2.9</Version>
     <LangVersion>latest</LangVersion>
     <!-- Explicit entry point so we can catch/log exceptions that happen
          before Application.OnStartup (e.g. App.xaml load failures). -->
@@ -42,13 +46,18 @@
 
   <ItemGroup>
     <!-- SwarmUI bridge library (source included for easy zip distribution). -->
-    <ProjectReference Include="PromptLoom.Domain\PromptLoom.Domain.csproj" />
+    <ProjectReference Include="PromptLoom.Domain\PromptLoom.Domain.csproj" />   
     <ProjectReference Include="PromptLoom.Infrastructure\PromptLoom.Infrastructure.csproj" />
     <ProjectReference Include="SwarmUi.Client\SwarmUi.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.6" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Build fix: exclude test sources from the app project to avoid pulling xUnit references into WPF builds. -->
-    <Compile Include="**\*.cs" Exclude="External\**\*.cs;bin\**;obj\**;PromptLoom.Tests\**\*.cs" />
+    <Compile Include="**\*.cs" Exclude="External\**\*.cs;SwarmUi.Client\**\*.cs;**\bin\**;**\obj\**;PromptLoom.Tests\**\*.cs" />
   </ItemGroup>
 </Project>

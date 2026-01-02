@@ -1,3 +1,5 @@
+// CHANGE LOG
+// - 2026-01-02 | Request: Tag search wiring | Add SearchViewModel initialization in MainViewModel.
 // FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
 // CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
 // CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
@@ -77,6 +79,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private static readonly HttpClient s_http = new HttpClient();
 
     public ObservableCollection<string> ErrorEntries => _errors.Entries;
+    public SearchViewModel SearchViewModel { get; }
 
     // Bulk updates (All/None) must not trigger mid-loop prompt recomputes.
     private int _bulkUpdateDepth;
@@ -534,6 +537,7 @@ private string _promptText = "";
     public void Initialize()
     {
         Reload();
+        _ = SearchViewModel.InitializeAsync();
 
         // Load Swarm server metadata on startup (best effort).
         // Fire-and-forget async methods which update observable collections on the UI thread.
@@ -558,7 +562,8 @@ private string _promptText = "";
         IUiDialogService? uiDialog = null,
         IClipboardService? clipboard = null,
         IProcessService? process = null,
-        IDispatcherService? dispatcher = null)
+        IDispatcherService? dispatcher = null,
+        SearchViewModel? searchViewModel = null)
     {
         _errors = errorReporter ?? new ErrorReporterAdapter();
         _errors.Info("MainViewModel ctor begin");
@@ -588,6 +593,8 @@ private string _promptText = "";
 
         _schema = new SchemaService(root);
         _errors.Info("SchemaService created. CategoriesDir=" + _schema.CategoriesDir);
+
+        SearchViewModel = searchViewModel ?? BuildSearchViewModel();
 
         ReloadCommand = new RelayCommand("Reload", _ => Reload(), errorReporter: _errors);
         SaveCommand = new RelayCommand("Save", _ => Save(), errorReporter: _errors);
@@ -628,9 +635,20 @@ private string _promptText = "";
         RandomizeSubCategoryOnceCommand = new RelayCommand("RandomizeSubCategoryOnce", p => RandomizeSubCategoryOnce(p), errorReporter: _errors);
 
         _errors.Info("MainViewModel ctor end");
-    
+
         LoadUserSettings();
-}
+    }
+
+    private SearchViewModel BuildSearchViewModel()
+    {
+        var tagIndexStore = new TagIndexStore(_fileSystem, _appDataStore);
+        var stopWordsStore = new StopWordsStore(_fileSystem, _appDataStore);
+        var tokenizer = new TagTokenizer();
+        var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, _appDataStore, _fileSystem, _clock);
+        var tagSearchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
+
+        return new SearchViewModel(tagIndexer, tagSearchService, _errors);
+    }
 
     private void RandomizeCategoryOnce(object? param)
     {
