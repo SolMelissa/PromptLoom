@@ -1,3 +1,7 @@
+<!-- CHANGE LOG -->
+<!-- - 2026-03-02 | Request: Deduplicate prompt panel | Reuse shared prompt UI control for both layouts. -->
+<!-- - 2025-12-31 | Request: Single-image label sizing | Align small-batch labels with thumbnail height. -->
+<!-- - 2025-12-31 | Request: SwarmUI cards + toggles | Add model/LoRA cards and send toggles. -->
 <!-- Bugfix: Fix duplicate IconBtn resource key by renaming base style to IconBtnBase so style lookups are unambiguous. -->
 <!-- Bugfix: Allow the shared IconBtn style to apply to ToggleButton instances to prevent XamlParseException popups triggered by a Button-only style target. -->
 <Window x:Class="PromptLoom.MainWindow"
@@ -15,6 +19,18 @@
         <conv:PastelByIndexConverter x:Key="PastelByIndex"/>
         <conv:AspectToVisibilityConverter x:Key="AspectToVis"/>
         <conv:OneLineTextConverter x:Key="OneLine"/>
+
+        <DataTemplate x:Key="SwarmAssetCardTemplate">
+            <Border Background="#14000000" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
+                    CornerRadius="8" Padding="6" Margin="0,2" ToolTip="{Binding Name}">
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock FontSize="11" Opacity="0.65" Text="{Binding PathHint}" TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding HasPathHint, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock FontSize="11" Opacity="0.7" Text="{Binding KindLabel}"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
 
         
         <!-- Vector icons (24x24) -->
@@ -204,11 +220,11 @@
                                                         CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/></Button>
 	                                                <ToggleButton Style="{StaticResource IconToggleBtn}"
 	                                                             ToolTip="Lock category (exclude from randomization)"
-	                                                             IsChecked="{Binding IsLocked}" Content="🔒"/>
+	                                                             IsChecked="{Binding IsLocked}" Content="≡ƒöÆ"/>
 	                                                <Button Style="{StaticResource IconBtn}"
 	                                                        ToolTip="Randomize this category"
 	                                                        Command="{Binding DataContext.RandomizeCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-	                                                        CommandParameter="{Binding}" Content="🎲"/>
+	                                                        CommandParameter="{Binding}" Content="≡ƒÄ▓"/>
 </UniformGrid>
                                             
                                         </DockPanel>
@@ -250,11 +266,11 @@
                                                                             CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/></Button>
 	                                                                    <ToggleButton Style="{StaticResource IconToggleBtn}"
 	                                                                                 ToolTip="Lock subcategory (exclude from randomization)"
-	                                                                                 IsChecked="{Binding IsLocked}" Content="🔒"/>
+	                                                                                 IsChecked="{Binding IsLocked}" Content="≡ƒöÆ"/>
 	                                                                    <Button Style="{StaticResource IconBtn}"
 	                                                                            ToolTip="Randomize this subcategory"
 	                                                                            Command="{Binding DataContext.RandomizeSubCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-	                                                                            CommandParameter="{Binding}" Content="🎲"/>
+	                                                                            CommandParameter="{Binding}" Content="≡ƒÄ▓"/>
 </UniformGrid>
                                                                 <Button
                                                                         CommandParameter="{Binding}" Command="{Binding DataContext.SelectSubCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="{Binding Name}" Background="Transparent" BorderThickness="0" Padding="6,2" HorizontalAlignment="Left"/></DockPanel>
@@ -524,344 +540,7 @@
             </DockPanel>
 
             <!-- Prompt -->
-            <DockPanel Grid.Column="2">
-                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                    <TextBlock FontSize="26" FontWeight="SemiBold" Text="Prompt" Foreground="{StaticResource AccentPink}"/>
-                    <TextBlock Opacity="0.75" Text="Updates live. If empty, check System Messages."/>
-                </StackPanel>
-
-                <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
-                    <Grid>
-                        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-<TabControl Grid.Row="1" Margin="0" Background="Transparent" VerticalAlignment="Stretch">
-            <TabItem Header="Prompt">
-    <Border Padding="8" Background="Transparent">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-<!-- Top controls -->
-
-
-<Grid Grid.Row="0" Margin="0,0,0,10">
-
-
-    <Grid.ColumnDefinitions>
-
-
-        <ColumnDefinition Width="*"/>
-
-
-        <ColumnDefinition Width="Auto"/>
-
-
-    </Grid.ColumnDefinitions>
-
-
-
-    <WrapPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
-
-
-        <Button Content="{Binding CopyButtonText}" Width="110" Margin="0,0,8,0" Command="{Binding CopyCommand}"/>
-
-
-        <Button Content="🎲 Randomize" Width="130" Margin="0,0,12,0" Command="{Binding RandomizeCommand}"/>
-
-
-        <Button Content="{Binding SwarmButtonText}" Width="160" Margin="0,0,12,0" Command="{Binding SendToSwarmUiCommand}"/>
-
-
-        <Button Content="Batch Generate" Width="140" Margin="0,0,0,0" Command="{Binding SendBatchToSwarmUiCommand}"/>
-
-
-    </WrapPanel>
-
-
-
-    <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
-
-
-        <TextBlock Margin="0,4,0,0" Opacity="0.75" Text="Qty:"/>
-
-
-        <TextBox Width="52" Margin="8,0,12,0" Background="{StaticResource InputCyan}"
-
-
-                 HorizontalAlignment="Right"
-
-
-                 Text="{Binding BatchQty, UpdateSourceTrigger=PropertyChanged}"/>
-
-
-        <CheckBox Content="Randomize Prompts" VerticalAlignment="Center" IsChecked="{Binding BatchRandomizePrompts}" Margin="0,0,12,0"/>
-
-
-        <TextBlock Margin="0,4,0,0" Opacity="0.75" Text="Seed:"/>
-
-
-        <TextBox Width="120" MinWidth="90" Margin="8,0,0,0" Background="{StaticResource InputCyan}"
-
-
-                 Text="{Binding SeedText, UpdateSourceTrigger=PropertyChanged}" />
-
-
-    </WrapPanel>
-
-
-</Grid><!-- Prompt (auto-sized) -->
-            <controls:AutoSizeTextBox Grid.Row="1"
-                                     MaxAutoHeight="260"
-                                     Background="{StaticResource PromptPink}"
-                                     FontSize="14"
-                                     Text="{Binding PromptText, UpdateSourceTrigger=PropertyChanged}"/>
-
-            <!-- Recent batches fill the rest -->
-            <Border Grid.Row="2" CornerRadius="12" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
-                    Background="{StaticResource PanelBg}" Padding="8" Margin="0,10,0,10">
-                <DockPanel LastChildFill="True">
-                    <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Text="Latest Images" Margin="0,0,0,6"/>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding RecentBatches}">
-                            <ItemsControl.Resources>
-                                <!-- Thumbnail card used by both batch styles -->
-                                <DataTemplate x:Key="ThumbTemplate">
-                                    <Border Width="160" Height="160" Margin="0,0,8,8" CornerRadius="10" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Background="#0A000000" Padding="6">
-                                        <Grid>
-                                            <Button Background="Transparent" BorderThickness="0" Padding="0"
-                                                    Command="{Binding DataContext.ShowImageOverlayCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                    CommandParameter="{Binding}">
-                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-                                            </Button>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-
-                                <!-- 4+ images: render as a compact batch card that can sit side-by-side -->
-                                <DataTemplate x:Key="BatchCardTemplate">
-                                    <Border Margin="0,0,12,12" CornerRadius="12" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Background="#06000000" Padding="8" MinWidth="320">
-                                        <DockPanel>
-                                            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock FontWeight="SemiBold" Text="{Binding Title, Converter={StaticResource OneLine}}"/>
-                                                    <TextBlock Opacity="0.65" Margin="10,0,0,0" Text="{Binding Items.Count, StringFormat=({0})}"/>
-                                                </StackPanel>
-                                                <TextBlock Opacity="0.78" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                                           Text="{Binding PromptSnippet, Converter={StaticResource OneLine}}"/>
-                                                <TextBlock Opacity="0.65" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                                           Text="{Binding SettingsSummary, Converter={StaticResource OneLine}}"/>
-                                            </StackPanel>
-
-	                                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-	                                                <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ThumbTemplate}">
-	                                                    <ItemsControl.ItemsPanel>
-	                                                        <ItemsPanelTemplate>
-	                                                            <StackPanel Orientation="Horizontal"/>
-	                                                        </ItemsPanelTemplate>
-	                                                    </ItemsControl.ItemsPanel>
-	                                                </ItemsControl>
-	                                            </ScrollViewer>
-                                        </DockPanel>
-                                    </Border>
-                                </DataTemplate>
-
-                                <!-- 1-3 images: render as a vertical label separator with thumbnails to its right -->
-                                <DataTemplate x:Key="BatchSmallTemplate">
-                                    <Border Margin="0,0,12,12" Background="#03000000" BorderBrush="#22000000" BorderThickness="1" CornerRadius="10" Padding="6">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="32"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-
-                                            <!-- Vertical label -->
-	                                            <Border Grid.Column="0" Background="#0A000000" CornerRadius="8" Padding="2" Margin="0,0,6,0" VerticalAlignment="Stretch" MinHeight="160">
-                                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11" Opacity="0.85" TextTrimming="CharacterEllipsis">
-                                                    <TextBlock.LayoutTransform>
-                                                        <RotateTransform Angle="-90"/>
-                                                    </TextBlock.LayoutTransform>
-                                                    <TextBlock.Text>
-															<!-- NOTE: XAML treats "{...}" as a markup extension unless escaped. Prefix with "{}" for a literal format string. -->
-															<MultiBinding StringFormat="{}{0} · {1}">
-                                                            <Binding Path="Title" Converter="{StaticResource OneLine}"/>
-                                                            <Binding Path="PromptSnippet" Converter="{StaticResource OneLine}"/>
-                                                        </MultiBinding>
-                                                    </TextBlock.Text>
-                                                </TextBlock>
-                                            </Border>
-
-                                            <!-- Thumbnails -->
-	                                            <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-	                                                <ItemsControl x:Name="SmallThumbs" ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ThumbTemplate}">
-	                                                    <ItemsControl.ItemsPanel>
-	                                                        <ItemsPanelTemplate>
-	                                                            <StackPanel Orientation="Horizontal"/>
-	                                                        </ItemsPanelTemplate>
-	                                                    </ItemsControl.ItemsPanel>
-	                                                </ItemsControl>
-	                                            </ScrollViewer>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.Resources>
-
-                            <!-- IMPORTANT: top-level is a wrap panel so batches can flow left-to-right and only wrap when needed -->
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <ContentControl Content="{Binding}">
-                                        <ContentControl.Style>
-                                            <Style TargetType="ContentControl">
-                                                <Setter Property="ContentTemplate" Value="{StaticResource BatchSmallTemplate}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsCard}" Value="True">
-                                                        <Setter Property="ContentTemplate" Value="{StaticResource BatchCardTemplate}"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </ContentControl.Style>
-                                    </ContentControl>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </DockPanel>
-            </Border>
-
-            <!-- Status pinned to bottom (3 lines) -->
-            <Border Grid.Row="3" CornerRadius="8" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
-                    Background="{StaticResource PanelBg}" Padding="8">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Text="Status" Margin="0,0,0,4"/>
-                    <TextBox Text="{Binding SystemMessages}" TextWrapping="Wrap" IsReadOnly="True"
-                             BorderThickness="0" Background="Transparent" Height="54" VerticalScrollBarVisibility="Auto"/>
-                </DockPanel>
-            </Border>
-        </Grid>
-    </Border>
-</TabItem>
-    <TabItem Header="SwarmUI">
-        <Border Padding="10" Background="Transparent">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel>
-                    <TextBlock FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource AccentPink}" Text="SwarmUI"/>
-                    <TextBlock Margin="0,4,0,12" Opacity="0.75" Text="Connection + tools for realtime generation and model selection."/>
-
-                    <TextBlock FontWeight="SemiBold" Text="Server URL"/>
-                    <TextBox Margin="0,6,0,12" Background="{StaticResource InputCyan}"
-                             Text="{Binding SwarmUrl, UpdateSourceTrigger=PropertyChanged}"/>
-
-                    <TextBlock FontWeight="SemiBold" Text="Auth Token (optional)"/>
-                    <TextBox Margin="0,6,0,12" Background="{StaticResource InputCyan}"
-                             Text="{Binding SwarmToken, UpdateSourceTrigger=PropertyChanged}"/>
-
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
-                        <CheckBox Content="Send Model Override" IsChecked="{Binding SendSwarmModelOverride}" Margin="0,0,12,0"/>
-                        <TextBlock FontWeight="SemiBold" Text="Model" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,12">
-                        <ComboBox MinWidth="360" Background="{StaticResource InputCyan}"
-                                  IsEnabled="{Binding CanEditSwarmModelOverride}"
-                                  ItemsSource="{Binding SwarmModels}"
-                                  SelectedItem="{Binding SwarmSelectedModel, UpdateSourceTrigger=PropertyChanged}"/>
-                        <Button Width="150" Margin="8,0,0,0" Content="Refresh Models" Command="{Binding RefreshSwarmModelsCommand}"/>
-                    </StackPanel>
-
-                    <Border CornerRadius="10" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Padding="10" Margin="0,0,0,12">
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="Generation Overrides" Margin="0,0,0,8"/>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <CheckBox Content="Send Steps" IsChecked="{Binding SendSwarmSteps}" Margin="0,0,12,0"/>
-                                <TextBlock Opacity="0.75" Text="Steps:" VerticalAlignment="Center"/>
-                                <TextBox Width="80" Margin="8,0,0,0" Background="{StaticResource InputCyan}"
-                                         IsEnabled="{Binding CanEditSwarmSteps}"
-                                         Text="{Binding SwarmSteps, UpdateSourceTrigger=PropertyChanged}"/>
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                <CheckBox Content="Send CFG Scale" IsChecked="{Binding SendSwarmCfgScale}" Margin="0,0,12,0"/>
-                                <TextBlock Opacity="0.75" Text="CFG:" VerticalAlignment="Center"/>
-                                <TextBox Width="80" Margin="8,0,0,0" Background="{StaticResource InputCyan}"
-                                         IsEnabled="{Binding CanEditSwarmCfgScale}"
-                                         Text="{Binding SwarmCfgScale, UpdateSourceTrigger=PropertyChanged}"/>
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
-                                <CheckBox Content="Send LoRAs" IsChecked="{Binding SendSwarmLoras}" Margin="0,0,12,0"/>
-                                <TextBlock FontWeight="SemiBold" Text="LoRAs" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,8">
-                                <ComboBox MinWidth="300" Background="{StaticResource InputCyan}" IsEnabled="{Binding CanEditSwarmLoras}"
-                                          ItemsSource="{Binding SwarmLoras}"
-                                          SelectedItem="{Binding SwarmSelectedLora1, UpdateSourceTrigger=PropertyChanged}"/>
-                                <TextBlock Opacity="0.75" VerticalAlignment="Center" Margin="10,0,0,0" Text="Weight:"/>
-                                <TextBox Width="70" Margin="8,0,0,0" Background="{StaticResource InputCyan}" IsEnabled="{Binding CanEditSwarmLoras}"
-                                         Text="{Binding SwarmLora1Weight, UpdateSourceTrigger=PropertyChanged}"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <ComboBox MinWidth="300" Background="{StaticResource InputCyan}" IsEnabled="{Binding CanEditSwarmLoras}"
-                                          ItemsSource="{Binding SwarmLoras}"
-                                          SelectedItem="{Binding SwarmSelectedLora2, UpdateSourceTrigger=PropertyChanged}"/>
-                                <TextBlock Opacity="0.75" VerticalAlignment="Center" Margin="10,0,0,0" Text="Weight:"/>
-                                <TextBox Width="70" Margin="8,0,0,0" Background="{StaticResource InputCyan}" IsEnabled="{Binding CanEditSwarmLoras}"
-                                         Text="{Binding SwarmLora2Weight, UpdateSourceTrigger=PropertyChanged}"/>
-                            </StackPanel>
-
-                            <Button Width="150" Content="Refresh LoRAs" Command="{Binding RefreshSwarmLorasCommand}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                        <Button Width="150" Margin="0,0,8,0" Content="Test Connection" Command="{Binding TestSwarmConnectionCommand}"/>
-                        <Button Width="150" Content="Open SwarmUI" Command="{Binding OpenSwarmUiCommand}"/>
-                    </StackPanel>
-
-                    <Border CornerRadius="10" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Padding="10">
-                        <TextBlock Text="{Binding SwarmUiStatusText}" TextWrapping="Wrap"/>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
-        </Border>
-    </TabItem>
-    <TabItem Header="System">
-        <Border Padding="8" Background="Transparent">
-            <ListBox ItemsSource="{Binding ErrorEntries}" /></Border>
-    </TabItem>
-    <TabItem Header="File Editor">
-        <Border Padding="8" Background="Transparent">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                    <Button Content="Save" Width="90" Margin="0,0,8,0" Command="{Binding SaveEntryFileCommand}"/>
-                    <Button Content="Open" Width="90" Margin="0,0,8,0" Command="{Binding OpenEntryFileCommand}"/>
-                    <TextBlock Opacity="0.75" VerticalAlignment="Center" Text="{Binding EntryEditorPath}" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
-                <TextBox Text="{Binding EntryEditorText, UpdateSourceTrigger=PropertyChanged}"
-                         TextWrapping="Wrap" AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto"
-                         Background="{StaticResource InputCyan}"
-                         FontSize="13"/>
-            </DockPanel>
-        </Border>
-    </TabItem>
-</TabControl>
-
-                        
-                    </Grid>
-                </Border>
-
-                </DockPanel>
+            <controls:PromptPanel Grid.Column="2"/>
 
 	        </Grid>
 
@@ -927,8 +606,8 @@
 	                                                                    Command="{Binding DataContext.SelectAllSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectAll}"/></Button>
 														<Button Style="{StaticResource IconBtn}"  ToolTip="Select no subcategories"
 														        Command="{Binding DataContext.SelectNoneSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/></Button>
-														<ToggleButton Style="{StaticResource IconToggleBtn}" ToolTip="Lock category (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="🔒"/>
-														<Button Style="{StaticResource IconBtn}" ToolTip="Randomize this category" Command="{Binding DataContext.RandomizeCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="🎲"/>
+														<ToggleButton Style="{StaticResource IconToggleBtn}" ToolTip="Lock category (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="≡ƒöÆ"/>
+														<Button Style="{StaticResource IconBtn}" ToolTip="Randomize this category" Command="{Binding DataContext.RandomizeCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="≡ƒÄ▓"/>
 	</UniformGrid>
 	                                                    </DockPanel>
 	                                                    <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Margin="0,8,0,0">
@@ -944,8 +623,8 @@
 	                                                                                        Command="{Binding DataContext.MoveSubCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/></Button>
 																						<Button Style="{StaticResource IconBtn}"  ToolTip="Move subcategory down"
 																						        Command="{Binding DataContext.MoveSubCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/></Button>
-																						<ToggleButton Style="{StaticResource IconToggleBtn}" ToolTip="Lock subcategory (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="🔒"/>
-																						<Button Style="{StaticResource IconBtn}" ToolTip="Randomize this subcategory" Command="{Binding DataContext.RandomizeSubCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="🎲"/>
+																						<ToggleButton Style="{StaticResource IconToggleBtn}" ToolTip="Lock subcategory (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="≡ƒöÆ"/>
+																						<Button Style="{StaticResource IconBtn}" ToolTip="Randomize this subcategory" Command="{Binding DataContext.RandomizeSubCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="≡ƒÄ▓"/>
 </UniformGrid>
 	                                                                            <Button CommandParameter="{Binding}" Command="{Binding DataContext.SelectSubCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="{Binding Name}" Background="Transparent" BorderThickness="0" Padding="6,2" HorizontalAlignment="Left"/></DockPanel>
 	                                                                    </DataTemplate>
@@ -1147,207 +826,13 @@
 	            </TabControl>
 
 	            <!-- Prompt (stacked bottom) -->
-	            <DockPanel Grid.Row="2">
-	                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-	                    <TextBlock FontSize="26" FontWeight="SemiBold" Text="Prompt" Foreground="{StaticResource AccentPink}"/>
-	                    <TextBlock Opacity="0.75" Text="Updates live. If empty, check System Messages."/>
-	                </StackPanel>
-	
-	                <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
-	                    <Grid>
-	                        <Grid.RowDefinitions>
-	                            <RowDefinition Height="Auto"/>
-	                            <RowDefinition Height="*"/>
-	                        </Grid.RowDefinitions>
-							<TabControl Grid.Row="1" Margin="0" Background="Transparent" VerticalAlignment="Stretch">
-    <TabItem Header="Prompt">
-        <Border Padding="8" Background="Transparent">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions><!-- Top controls -->
-<Grid Grid.Row="0" Margin="0,0,0,10">
-    <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-    </Grid.ColumnDefinitions>
-
-    <WrapPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
-        <Button Content="{Binding CopyButtonText}" Width="110" Margin="0,0,8,0" Command="{Binding CopyCommand}"/>
-        <Button Content="🎲 Randomize" Width="130" Margin="0,0,12,0" Command="{Binding RandomizeCommand}"/>
-        <Button Content="{Binding SwarmButtonText}" Width="160" Margin="0,0,12,0" Command="{Binding SendToSwarmUiCommand}"/>
-        <Button Content="Batch Generate" Width="140" Margin="0,0,0,0" Command="{Binding SendBatchToSwarmUiCommand}"/>
-    </WrapPanel>
-
-    <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
-        <TextBlock Margin="0,4,0,0" Opacity="0.75" Text="Qty:"/>
-        <TextBox Width="52" Margin="8,0,12,0" Background="{StaticResource InputCyan}"
-                 HorizontalAlignment="Right"
-                 Text="{Binding BatchQty, UpdateSourceTrigger=PropertyChanged}"/>
-        <CheckBox Content="Randomize Prompts" VerticalAlignment="Center" IsChecked="{Binding BatchRandomizePrompts}" Margin="0,0,12,0"/>
-        <TextBlock Margin="0,4,0,0" Opacity="0.75" Text="Seed:"/>
-        <TextBox Width="120" MinWidth="90" Margin="8,0,0,0" Background="{StaticResource InputCyan}"
-                 Text="{Binding SeedText, UpdateSourceTrigger=PropertyChanged}" />
-    </WrapPanel>
-</Grid>
-
-            <controls:AutoSizeTextBox Grid.Row="1"
-                                     Background="{StaticResource PromptPink}"
-                                     FontSize="14"
-                                     MaxAutoHeight="260"
-                                     Text="{Binding PromptText, UpdateSourceTrigger=PropertyChanged}"/>
-
-                <Border Grid.Row="2" CornerRadius="12" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
-                        Background="{StaticResource PanelBg}" Padding="8" Margin="0,10,0,10">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Text="Latest Images" Margin="0,0,0,6"/>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding RecentBatches}">
-                            <ItemsControl.Resources>
-                                <DataTemplate x:Key="ThumbTemplate">
-                                    <Border Width="160" Height="160" Margin="0,0,8,8" CornerRadius="10" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Background="#0A000000" Padding="6">
-                                        <Grid>
-                                            <Button Background="Transparent" BorderThickness="0" Padding="0"
-                                                    Command="{Binding DataContext.ShowImageOverlayCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                    CommandParameter="{Binding}">
-                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-                                            </Button>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-
-	                                <DataTemplate x:Key="BatchCardTemplate">
-	                                    <Border Margin="0,0,12,12" CornerRadius="12" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Background="#06000000" Padding="8" MinWidth="320">
-                                        <DockPanel>
-                                            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock FontWeight="SemiBold" Text="{Binding Title, Converter={StaticResource OneLine}}"/>
-                                                    <TextBlock Opacity="0.65" Margin="10,0,0,0" Text="{Binding Items.Count, StringFormat=({0})}"/>
-                                                </StackPanel>
-                                                <TextBlock Opacity="0.78" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                                           Text="{Binding PromptSnippet, Converter={StaticResource OneLine}}"/>
-                                                <TextBlock Opacity="0.65" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                                           Text="{Binding SettingsSummary, Converter={StaticResource OneLine}}"/>
-                                            </StackPanel>
-
-                                            <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ThumbTemplate}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <WrapPanel Orientation="Horizontal"/>
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                            </ItemsControl>
-                                        </DockPanel>
-                                    </Border>
-                                </DataTemplate>
-
-                                <DataTemplate x:Key="BatchSmallTemplate">
-                                    <Border Margin="0,0,12,12" Background="#03000000" BorderBrush="#22000000" BorderThickness="1" CornerRadius="10" Padding="6">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="32"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-
-	                                            <Border Grid.Column="0" Background="#0A000000" CornerRadius="8" Padding="2" Margin="0,0,6,0" VerticalAlignment="Stretch" MinHeight="160">
-                                                <TextBlock FontWeight="SemiBold" FontSize="11" Opacity="0.85" TextTrimming="CharacterEllipsis">
-                                                    <TextBlock.LayoutTransform>
-                                                        <RotateTransform Angle="-90"/>
-                                                    </TextBlock.LayoutTransform>
-                                                    <TextBlock.Text>
-                                                        <MultiBinding StringFormat="{}{0} · {1}">
-                                                            <Binding Path="Title" Converter="{StaticResource OneLine}"/>
-                                                            <Binding Path="PromptSnippet" Converter="{StaticResource OneLine}"/>
-                                                        </MultiBinding>
-                                                    </TextBlock.Text>
-                                                </TextBlock>
-                                            </Border>
-
-                                            <ItemsControl Grid.Column="1" ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ThumbTemplate}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <WrapPanel Orientation="Horizontal"/>
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                            </ItemsControl>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.Resources>
-
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <ContentControl Content="{Binding}">
-                                        <ContentControl.Style>
-                                            <Style TargetType="ContentControl">
-                                                <Setter Property="ContentTemplate" Value="{StaticResource BatchSmallTemplate}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsCard}" Value="True">
-                                                        <Setter Property="ContentTemplate" Value="{StaticResource BatchCardTemplate}"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </ContentControl.Style>
-                                    </ContentControl>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        </ScrollViewer>
-                    </DockPanel>
-                </Border>
-
-                <Border Grid.Row="3" CornerRadius="8" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
-                        Background="{StaticResource PanelBg}" Padding="8">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Text="Status" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding SystemMessages}" TextWrapping="Wrap" IsReadOnly="True"
-                                 BorderThickness="0" Background="Transparent" Height="54" VerticalScrollBarVisibility="Auto"/>
-                    </DockPanel>
-                </Border>
-            </Grid>
-        </Border>
-    </TabItem>
-    <TabItem Header="System">
-        <Border Padding="8" Background="Transparent">
-            <ListBox ItemsSource="{Binding ErrorEntries}" /></Border>
-    </TabItem>
-    <TabItem Header="File Editor">
-        <Border Padding="8" Background="Transparent">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                    <Button Content="Save" Width="90" Margin="0,0,8,0" Command="{Binding SaveEntryFileCommand}"/>
-                    <Button Content="Open" Width="90" Margin="0,0,8,0" Command="{Binding OpenEntryFileCommand}"/>
-                    <TextBlock Opacity="0.75" VerticalAlignment="Center" Text="{Binding EntryEditorPath}" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
-                <TextBox Text="{Binding EntryEditorText, UpdateSourceTrigger=PropertyChanged}"
-                         TextWrapping="Wrap" AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto"
-                         Background="{StaticResource InputCyan}"
-                         FontSize="13"/>
-            </DockPanel>
-        </Border>
-    </TabItem>
-
-</TabControl>
-	                    </Grid>
-	                </Border>
-	
-	                </DockPanel>
+            <controls:PromptPanel Grid.Row="2"/>
 	        </Grid>
 
 	    </Grid>
 	</DockPanel>
 
-        <!-- Fullscreen image overlay: close via ✕ only; image supports zoom (wheel/up/down) + pan (drag) + prev/next (edges/left-right) -->
+        <!-- Fullscreen image overlay: close via Γ£ò only; image supports zoom (wheel/up/down) + pan (drag) + prev/next (edges/left-right) -->
 	        <Grid x:Name="ImageOverlayRoot" Panel.ZIndex="999"
               Background="#88000000"
 	              Visibility="{Binding IsImageOverlayVisible, Converter={StaticResource BoolToVis}}"
@@ -1367,7 +852,7 @@
 
                 <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Width="40" Height="40"
                         Background="#AA000000" Foreground="#FFF" BorderBrush="#33FFFFFF" BorderThickness="1"
-                        Content="✕" FontSize="16" FontWeight="SemiBold"
+                        Content="Γ£ò" FontSize="16" FontWeight="SemiBold"
                         Command="{Binding HideImageOverlayCommand}"/>
             </Grid>
 
@@ -1451,3 +936,6 @@
 
     </Grid>
 </Window>
+
+
+

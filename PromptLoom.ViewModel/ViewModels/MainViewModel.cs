@@ -1,7 +1,7 @@
 // CHANGE LOG
+// - 2026-03-02 | Request: Batch qty slider | Clamp batch quantity to 2-50.
 // - 2026-03-02 | Fix: Restore AutoSave helper | Reintroduce AutoSave to funnel into the debounced queue.
-// - 2025-12-31 | Request: MVVM split | Update project root sentinel to PromptLoom.View.csproj.
-// - 2025-12-25 | Fix: UI side-effect wrappers | Inject UI service wrappers for testable side effects.
+// - 2025-12-31 | Request: SwarmUI cards + toggles | Add model/LoRA cards, seed toggle, and persistence fixes.
 // FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
 // CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
 // CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
@@ -151,12 +151,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string SwarmSelectedModel
     {
         get => _swarmSelectedModel;
-        set { _swarmSelectedModel = value; OnPropertyChanged(); }
+        set { _swarmSelectedModel = value; OnPropertyChanged(); QueueAutoSave(); }
     }
 
-    public ObservableCollection<string> SwarmModels { get; } = new();
+    public ObservableCollection<SwarmAssetCardViewModel> SwarmModels { get; } = new();
 
-    public ObservableCollection<string> SwarmLoras { get; } = new();
+    public ObservableCollection<SwarmAssetCardViewModel> SwarmLoras { get; } = new();
 
     private bool _sendSwarmModelOverride = true;
     public bool SendSwarmModelOverride
@@ -178,7 +178,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool SendSwarmCfgScale
     {
         get => _sendSwarmCfgScale;
-        set { _sendSwarmCfgScale = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanEditSwarmCfgScale)); }
+        set { _sendSwarmCfgScale = value; OnPropertyChanged(); QueueAutoSave(); OnPropertyChanged(nameof(CanEditSwarmCfgScale)); }
     }
     public bool CanEditSwarmCfgScale => SendSwarmCfgScale;
 
@@ -194,6 +194,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         get => _swarmCfgScale;
         set { _swarmCfgScale = Math.Max(0.0, value); OnPropertyChanged(); QueueAutoSave(); }
+    }
+
+    private bool _sendSwarmSeed = true;
+    public bool SendSwarmSeed
+    {
+        get => _sendSwarmSeed;
+        set { _sendSwarmSeed = value; OnPropertyChanged(); QueueAutoSave(); }
     }
 
     private bool _sendSwarmLoras = false;
@@ -215,7 +222,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string SwarmSelectedLora2
     {
         get => _swarmSelectedLora2;
-        set { _swarmSelectedLora2 = value; OnPropertyChanged(); }
+        set { _swarmSelectedLora2 = value; OnPropertyChanged(); QueueAutoSave(); }
     }
 
     private double _swarmLora1Weight = 1.0;
@@ -236,7 +243,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public int BatchQty
     {
         get => _batchQty;
-        set { _batchQty = Math.Clamp(value, 1, 999); OnPropertyChanged(); QueueAutoSave(); }
+        set { _batchQty = Math.Clamp(value, 2, 50); OnPropertyChanged(); QueueAutoSave(); }
     }
 
     private bool _batchRandomizePrompts = true;
@@ -452,36 +459,30 @@ public sealed class MainViewModel : INotifyPropertyChanged
 private string _promptText = "";
     public string PromptText { get => _promptText; set { _promptText = value; OnPropertyChanged(); } }
 
-    private string _seedText = "";
-    // NOTE (2025-12-25): SeedText is user-editable and normally triggers prompt recomputation.
-    // SwarmUI can also report back the *actual* seed used for a generation; updating the seed display
-    // should not mutate the prompt currently shown in the prompt box. We therefore support a
-    // suppression mode for programmatic updates coming from SwarmUI frames.
-    public string SeedText
+    private string _promptSeedText = "";
+    // NOTE (2025-12-25): PromptSeedText is user-editable and triggers prompt recomputation.
+    public string PromptSeedText
     {
-        get => _seedText;
+        get => _promptSeedText;
         set
         {
-            _seedText = value;
+            _promptSeedText = value;
             OnPropertyChanged();
-            if (!_suppressSeedDrivenPromptRecompute)
-                RecomputePrompt();
+            RecomputePrompt();
         }
     }
 
-    private bool _suppressSeedDrivenPromptRecompute;
-
-    private void SetSeedTextFromSwarm(long seed)
+    private string _imageSeedText = "";
+    // NOTE (2025-12-31): ImageSeedText is used only for SwarmUI image generation.
+    public string ImageSeedText
     {
-        _suppressSeedDrivenPromptRecompute = true;
-        try
-        {
-            SeedText = seed.ToString(CultureInfo.InvariantCulture);
-        }
-        finally
-        {
-            _suppressSeedDrivenPromptRecompute = false;
-        }
+        get => _imageSeedText;
+        set { _imageSeedText = value; OnPropertyChanged(); }
+    }
+
+    private void SetImageSeedTextFromSwarm(long seed)
+    {
+        ImageSeedText = seed.ToString(CultureInfo.InvariantCulture);
     }
 
     // (UI) Copy feedback is shown directly on the Copy button.
@@ -1075,6 +1076,8 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
             SendSwarmCfgScale = s.SendSwarmCfgScale;
             SwarmCfgScale = s.SwarmCfgScale;
 
+            SendSwarmSeed = s.SendSwarmSeed;
+
             SendSwarmModelOverride = s.SendSwarmModelOverride;
             SwarmSelectedModel = s.SwarmSelectedModel ?? "";
 
@@ -1084,7 +1087,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
             SwarmSelectedLora2 = s.SwarmSelectedLora2 ?? "";
             SwarmLora2Weight = s.SwarmLora2Weight;
 
-            BatchQty = Math.Max(1, s.BatchQty);
+            BatchQty = Math.Clamp(s.BatchQty, 2, 50);
             BatchRandomizePrompts = s.BatchRandomizePrompts;
         }
         catch (Exception ex)
@@ -1107,6 +1110,8 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
 
                 SendSwarmCfgScale = SendSwarmCfgScale,
                 SwarmCfgScale = SwarmCfgScale,
+
+                SendSwarmSeed = SendSwarmSeed,
 
                 SendSwarmModelOverride = SendSwarmModelOverride,
                 SwarmSelectedModel = SwarmSelectedModel,
@@ -1148,7 +1153,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         {
             // NOTE (2025-12-22): SwarmUI accepts seed values of -1 (random) or any non-negative number.
             // Other negative numbers cause SwarmUI to error, so we clamp them to -1.
-            var seedLong = seedOverride.HasValue ? seedOverride.Value : NormalizeSeedForSwarmUi(SeedText);
+            var seedLong = seedOverride.HasValue ? seedOverride.Value : NormalizeSeedForSwarmUi(PromptSeedText);
             int? seed = seedLong is null
                 ? null
                 : (seedLong.Value <= int.MaxValue ? (int)seedLong.Value : int.MaxValue);
@@ -1197,7 +1202,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
     private void SendToSwarmUi()
     {
         if (string.IsNullOrWhiteSpace(PromptText)) return;
-        var seed = NormalizeSeedForSwarmUi(SeedText);
+        var seed = SendSwarmSeed ? NormalizeSeedForSwarmUi(ImageSeedText) : null;
         var batch = CreateBatchForRun(title: "Single", promptSnapshot: PromptText, seed: seed);
         _dispatcher.Invoke(() => AddRecentBatch(batch));
         _ = StartSwarmGenerationAsync(batch, PromptText, seed);
@@ -1207,21 +1212,21 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
     {
         // Fire off multiple generations grouped into a single batch.
         // "Randomized prompts" here means: regenerate the PromptLoom prompt using a fresh seed each time.
-        var batch = CreateBatchForRun(title: $"Batch ×{BatchQty}", promptSnapshot: PromptText, seed: null);
+        var imageSeed = SendSwarmSeed ? NormalizeSeedForSwarmUi(ImageSeedText) : null;
+        var batch = CreateBatchForRun(title: $"Batch ×{BatchQty}", promptSnapshot: PromptText, seed: imageSeed);
         _dispatcher.Invoke(() => AddRecentBatch(batch));
 
         for (var i = 0; i < BatchQty; i++)
         {
             string prompt;
-            long? seed;
+            long? seed = imageSeed;
 
             if (BatchRandomizePrompts)
             {
-                var s = _random.Next(0, int.MaxValue);
-                seed = s;
+                var promptSeed = _random.Next(0, int.MaxValue);
                 try
                 {
-                    var res = _engine.Generate(Categories, s);
+                    var res = _engine.Generate(Categories, promptSeed);
                     prompt = res.Prompt;
                 }
                 catch
@@ -1233,7 +1238,6 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
             else
             {
                 prompt = PromptText;
-                seed = NormalizeSeedForSwarmUi(SeedText);
             }
 
             if (string.IsNullOrWhiteSpace(prompt)) continue;
@@ -1373,7 +1377,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
             {
                 if (cts.IsCancellationRequested) break;
 
-                if (SwarmWsParser.TryParseSwarmWsFrame(frame, out var status, out var progress01, out var previewDataUrl, out var finalImageRef, out var seedUsed))
+                if (SwarmWsParser.TryParseSwarmWsFrame(frame, out var status, out var progress01, out var step, out var steps, out var previewDataUrl, out var finalImageRef, out var seedUsed))
                 {
                     _dispatcher.Invoke(() =>
                     {
@@ -1382,10 +1386,16 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                         if (!string.IsNullOrWhiteSpace(status))
                             item.Status = status;
 
+                        if (step is not null || steps is not null)
+                        {
+                            item.CurrentStep = step;
+                            item.TotalSteps = steps;
+                        }
+
                         if (seedUsed is not null)
                         {
                             // Keep the Prompt tab's seed display in sync with the actual SwarmUI seed.
-                            SetSeedTextFromSwarm(seedUsed.Value);
+                            SetImageSeedTextFromSwarm(seedUsed.Value);
                             item.Seed = seedUsed.Value;
                         }
 
@@ -1586,11 +1596,11 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
 
     private void Randomize()
     {
-        // Generate a new random seed and trigger prompt recomputation. Setting the seed
+        // Generate a new random seed and trigger prompt recomputation. Setting the prompt seed
         // property will cause RecomputePrompt() via its setter.
         // NOTE (2025-12-22): SwarmUI rejects negative seeds other than -1.
         // Keep randomized seeds non-negative so they are always valid for both PromptLoom and SwarmUI.
-        SeedText = _random.Next(0, int.MaxValue).ToString();
+        PromptSeedText = _random.Next(0, int.MaxValue).ToString();
         // When prefixes/suffixes are changed after randomization, recompute prompt using new random seed.
         QueueRecomputePrompt(immediate: true);
     }
@@ -1618,6 +1628,9 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
         }
     }
 
+    private static SwarmAssetCardViewModel BuildSwarmCard(string name, string kindLabel)
+        => new SwarmAssetCardViewModel(name, kindLabel);
+
     internal async Task RefreshSwarmModels()
     {
         try
@@ -1625,20 +1638,22 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
             SwarmUiStatusText = "Loading models...";
 
             var models = await _swarmService.ListModelsAsync(SwarmUrl, SwarmToken, depth: 8, ct: CancellationToken.None).ConfigureAwait(false);
+            var cards = models.Select(m => BuildSwarmCard(m, "Model")).ToList();
 
             _dispatcher.Invoke(() =>
             {
                 SwarmModels.Clear();
-                foreach (var m in models)
-                    SwarmModels.Add(m);
+                foreach (var card in cards)
+                    SwarmModels.Add(card);
 
-                if (!string.IsNullOrWhiteSpace(SwarmSelectedModel) && SwarmModels.Contains(SwarmSelectedModel))
+                if (!string.IsNullOrWhiteSpace(SwarmSelectedModel) &&
+                    SwarmModels.Any(m => string.Equals(m.Name, SwarmSelectedModel, StringComparison.OrdinalIgnoreCase)))
                 {
                     // keep user's selection
                 }
                 else if (SwarmModels.Count > 0)
                 {
-                    SwarmSelectedModel = SwarmModels[0];
+                    SwarmSelectedModel = SwarmModels[0].Name;
                 }
 
                 SwarmUiStatusText = models.Count == 0
@@ -1660,12 +1675,33 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
             SwarmUiStatusText = "Loading LoRAs...";
 
             var loras = await _swarmService.ListLorasAsync(SwarmUrl, SwarmToken, depth: 8, ct: CancellationToken.None).ConfigureAwait(false);
+            var cards = loras.Select(l => BuildSwarmCard(l, "LoRA")).ToList();
 
             _dispatcher.Invoke(() =>
             {
                 SwarmLoras.Clear();
-                foreach (var l in loras)
-                    SwarmLoras.Add(l);
+                foreach (var card in cards)
+                    SwarmLoras.Add(card);
+
+                if (!string.IsNullOrWhiteSpace(SwarmSelectedLora1) &&
+                    SwarmLoras.Any(l => string.Equals(l.Name, SwarmSelectedLora1, StringComparison.OrdinalIgnoreCase)))
+                {
+                    // keep selection
+                }
+                else if (SwarmLoras.Count > 0)
+                {
+                    SwarmSelectedLora1 = SwarmLoras[0].Name;
+                }
+
+                if (!string.IsNullOrWhiteSpace(SwarmSelectedLora2) &&
+                    SwarmLoras.Any(l => string.Equals(l.Name, SwarmSelectedLora2, StringComparison.OrdinalIgnoreCase)))
+                {
+                    // keep selection
+                }
+                else
+                {
+                    SwarmSelectedLora2 = "";
+                }
 
                 SwarmUiStatusText = loras.Count == 0
                     ? "Connected, but no LoRAs were returned (none installed or backend still loading?)."

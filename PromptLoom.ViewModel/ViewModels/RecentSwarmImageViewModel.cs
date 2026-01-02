@@ -1,3 +1,7 @@
+// CHANGE LOG
+// - 2025-12-31 | Request: Show step progress | Add per-image step/total step tracking for cards.
+// - 2025-12-22 | Fix: Per-image SwarmUI progress | Add status/progress/cancel fields per thumbnail.
+// - 2025-12-22 | Fix: Move SwarmUI generation UI | Replace global status bar with per-item view model.
 /*
 FIX: Move SwarmUI generation status/progress/cancel UI into each thumbnail item instead of global bar.
 CAUSE: Global status couldn't represent concurrent/overlapping generations and forced HttpClient timeout hacks.
@@ -44,6 +48,35 @@ public sealed class RecentSwarmImageViewModel : INotifyPropertyChanged
     /// <summary>0..1</summary>
     public double Progress { get => _progress; set { _progress = value; OnPropertyChanged(); OnPropertyChanged(nameof(ProgressPercent)); } }
     public int ProgressPercent => (int)Math.Round(Math.Clamp(Progress, 0, 1) * 100);
+
+    private int? _currentStep;
+    public int? CurrentStep
+    {
+        get => _currentStep;
+        set
+        {
+            _currentStep = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasStepProgress));
+            OnPropertyChanged(nameof(StepProgressText));
+        }
+    }
+
+    private int? _totalSteps;
+    public int? TotalSteps
+    {
+        get => _totalSteps;
+        set
+        {
+            _totalSteps = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasStepProgress));
+            OnPropertyChanged(nameof(StepProgressText));
+        }
+    }
+
+    public bool HasStepProgress => CurrentStep.HasValue && TotalSteps.HasValue && TotalSteps.Value > 0;
+    public string StepProgressText => HasStepProgress ? $"Step {CurrentStep}/{TotalSteps}" : "";
 
     private bool _isIndeterminate = true;
     public bool IsIndeterminate { get => _isIndeterminate; set { _isIndeterminate = value; OnPropertyChanged(); } }
