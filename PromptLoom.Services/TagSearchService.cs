@@ -1,4 +1,5 @@
 // CHANGE LOG
+// - 2026-03-02 | Request: File relevance | Add relevance percent for search results.
 // - 2026-01-02 | Request: Tag count scope | Add global tag count queries for suggestions.
 // - 2026-01-02 | Request: Tag counts | Add tag reference counts and match totals.
 using System;
@@ -19,6 +20,11 @@ public sealed record TagFileInfo(string Path, string FileName, int MatchCount)
     /// File label that includes the match count prefix.
     /// </summary>
     public string DisplayName => $"({MatchCount}) {FileName}";
+
+    /// <summary>
+    /// Relative relevance for the current result set (0-100).
+    /// </summary>
+    public int RelevancePercent { get; init; }
 }
 
 /// <summary>
