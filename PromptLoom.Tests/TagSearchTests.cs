@@ -1,7 +1,8 @@
 // CHANGE LOG
-// - 2026-01-02 | Fix: Forced reindex | Verify older index versions trigger a rescan.
+// - 2026-01-02 | Request: Global tag counts | Validate tag counts across all files.
+// - 2026-01-02 | Request: Related tag scoring | Verify weighted relevance percentages.
+// - 2026-01-02 | Request: Tag match counts | Validate match counts in search results.
 // - 2026-01-02 | Request: Content tag indexing test | Assert content-only tags are indexed.
-// - 2026-01-02 | Request: Content tag indexing | Add file-content tag coverage.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -101,6 +102,7 @@ public sealed class TagSearchTests
             var matches = await searchService.SearchFilesAsync(new[] { "body", "head" });
             Assert.Single(matches);
             Assert.Equal(filePath, matches[0].Path);
+            Assert.Equal(2, matches[0].MatchCount);
 
             var missing = await searchService.SearchFilesAsync(new[] { "body", "missing" });
             Assert.Empty(missing);
@@ -108,9 +110,89 @@ public sealed class TagSearchTests
             var contentMatches = await searchService.SearchFilesAsync(new[] { "seed" });
             Assert.Single(contentMatches);
             Assert.Equal(filePath, contentMatches[0].Path);
+            Assert.Equal(2, contentMatches[0].MatchCount);
 
             var suggestions = await searchService.SuggestTagsAsync("hea", 5);
             Assert.Contains("head", suggestions);
+        }
+        finally
+        {
+            CleanupRoot(rootDir);
+        }
+    }
+
+    [Fact]
+    public async Task TagSearchService_ComputesRelatedTagsWithWeights()
+    {
+        var rootDir = Path.Combine(AppContext.BaseDirectory, "TagRelatedTests", Guid.NewGuid().ToString("N"));
+        var categoriesDir = Path.Combine(rootDir, "Categories");
+        var filePathA = Path.Combine(categoriesDir, "Body", "Head", "Old Brunette.txt");
+        var filePathB = Path.Combine(categoriesDir, "Body", "Head", "Blonde.txt");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(filePathA)!);
+        File.WriteAllText(filePathA, "ocean");
+        File.WriteAllText(filePathB, "ocean ocean");
+
+        try
+        {
+            var fileSystem = new FileSystem();
+            var appDataStore = new FakeAppDataStore(rootDir);
+            var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
+            var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
+            var tokenizer = new TagTokenizer();
+            var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
+            var searchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
+
+            await tagIndexer.SyncAsync();
+
+            var matches = await searchService.SearchFilesAsync(new[] { "head" });
+            var related = await searchService.GetRelatedTagsAsync(
+                new[] { "head" },
+                matches.Select(match => match.Path).ToList(),
+                10);
+
+            Assert.DoesNotContain(related, item => item.Name == "head");
+
+            var body = related.Single(item => item.Name == "body");
+            Assert.Equal(100, body.RelevancePercent);
+
+            var ocean = related.Single(item => item.Name == "ocean");
+            Assert.Equal(75, ocean.RelevancePercent);
+        }
+        finally
+        {
+            CleanupRoot(rootDir);
+        }
+    }
+
+    [Fact]
+    public async Task TagSearchService_CountsTagsAcrossAllFiles()
+    {
+        var rootDir = Path.Combine(AppContext.BaseDirectory, "TagCountsTests", Guid.NewGuid().ToString("N"));
+        var categoriesDir = Path.Combine(rootDir, "Categories");
+        var filePathA = Path.Combine(categoriesDir, "Body", "Head", "Old.txt");
+        var filePathB = Path.Combine(categoriesDir, "Body", "Leg", "Old.txt");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(filePathA)!);
+        File.WriteAllText(filePathA, "seed");
+        File.WriteAllText(filePathB, "seed seed");
+
+        try
+        {
+            var fileSystem = new FileSystem();
+            var appDataStore = new FakeAppDataStore(rootDir);
+            var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
+            var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
+            var tokenizer = new TagTokenizer();
+            var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
+            var searchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
+
+            await tagIndexer.SyncAsync();
+
+            var counts = await searchService.CountTagReferencesAllFilesAsync(new[] { "body", "old", "seed" });
+            Assert.Equal(2, counts["body"]);
+            Assert.Equal(2, counts["old"]);
+            Assert.Equal(2, counts["seed"]);
         }
         finally
         {

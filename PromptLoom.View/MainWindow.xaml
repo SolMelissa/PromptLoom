@@ -1,4 +1,5 @@
 <!-- CHANGE LOG
+- 2026-03-02 | Fix: Resolve SearchState binding | Point viewModels namespace at PromptLoom.ViewModel assembly.
 - 2026-03-02 | Request: Deduplicate prompt panel | Reuse shared prompt UI control for both layouts.
 - 2026-01-02 | Request: Related tag relevance | Show related tags with relevance percent.
 - 2026-01-02 | Request: Tag counts in UI | Show tag counts and match totals in Search.
@@ -18,7 +19,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:PromptLoom.Converters"
         xmlns:controls="clr-namespace:PromptLoom.Controls"
-        xmlns:viewModels="clr-namespace:PromptLoom.ViewModels"
+        xmlns:viewModels="clr-namespace:PromptLoom.ViewModels;assembly=PromptLoom.ViewModel"
         Title="PromptLoom 2.1.2" Height="900" Width="1480"
         Background="{StaticResource BgMain}"
         WindowStartupLocation="CenterScreen">
