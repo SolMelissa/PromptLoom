@@ -1,4 +1,6 @@
 // CHANGE LOG
+// - 2026-01-02 | Fix: Content tag reindex | Force a full rescan when tag index version changes.
+// - 2026-01-02 | Request: Content tag indexing | Include file contents in tag counts.
 // - 2026-01-02 | Request: Tag search indexing | Add tag indexing pipeline with DB sync and counts.
 using System;
 using System.Collections.Generic;
@@ -38,6 +40,7 @@ public interface ITagIndexer
 /// </summary>
 public sealed class TagIndexer : ITagIndexer
 {
+    private const int CurrentIndexVersion = 2;
     private static readonly SemaphoreSlim IndexLock = new(1, 1);
 
     private readonly ITagIndexStore _tagIndexStore;
@@ -83,6 +86,9 @@ public sealed class TagIndexer : ITagIndexer
             using var transaction = connection.BeginTransaction();
 
             await ExecuteNonQueryAsync(connection, transaction, "PRAGMA foreign_keys = ON;", ct);
+
+            var storedIndexVersion = await LoadIndexVersionAsync(connection, transaction, ct);
+            var forceResync = storedIndexVersion < CurrentIndexVersion;
 
             var existingFiles = await LoadExistingFilesAsync(connection, transaction, ct);
             var removedPaths = existingFiles.Keys.Except(snapshots.Keys, StringComparer.OrdinalIgnoreCase).ToList();
@@ -158,13 +164,13 @@ public sealed class TagIndexer : ITagIndexer
             var tagIdCache = new Dictionary<string, long>(StringComparer.Ordinal);
             foreach (var snapshot in snapshots.Values)
             {
-                var isNew = !existingFiles.TryGetValue(snapshot.Path, out var existing)
-                    || existing.LastWriteTicks != snapshot.LastWriteTicks;
+                var hasExisting = existingFiles.TryGetValue(snapshot.Path, out var existing);
+                var isNew = forceResync || !hasExisting || existing == null || existing.LastWriteTicks != snapshot.LastWriteTicks;
 
                 if (!isNew)
                     continue;
 
-                if (existing == null)
+                if (!hasExisting || existing == null)
                     addedFiles++;
                 else
                     updatedFiles++;
@@ -211,10 +217,11 @@ public sealed class TagIndexer : ITagIndexer
             await ExecuteNonQueryAsync(
                 connection,
                 transaction,
-                "UPDATE IndexState SET LastScanTicks = $ticks, CategoriesRoot = $categoriesRoot WHERE Id = 1;",
+                "UPDATE IndexState SET LastScanTicks = $ticks, CategoriesRoot = $categoriesRoot, IndexVersion = $indexVersion WHERE Id = 1;",
                 ct,
                 ("$ticks", _clock.Now.Ticks),
-                ("$categoriesRoot", categoriesRoot));
+                ("$categoriesRoot", categoriesRoot),
+                ("$indexVersion", CurrentIndexVersion));
 
             await ExecuteNonQueryAsync(connection, transaction, "INSERT INTO TagFts(TagFts) VALUES('rebuild');", ct);
 
@@ -271,7 +278,33 @@ public sealed class TagIndexer : ITagIndexer
             tokenSegments.Add(segment);
         }
 
-        return _tokenizer.Tokenize(tokenSegments, stopWords);
+        var counts = new Dictionary<string, int>(_tokenizer.Tokenize(tokenSegments, stopWords), StringComparer.Ordinal);
+        var contentCounts = TokenizeFileContents(filePath, stopWords);
+        foreach (var entry in contentCounts)
+        {
+            if (counts.TryGetValue(entry.Key, out var existing))
+                counts[entry.Key] = existing + entry.Value;
+            else
+                counts[entry.Key] = entry.Value;
+        }
+
+        return counts;
+    }
+
+    private IReadOnlyDictionary<string, int> TokenizeFileContents(string filePath, IReadOnlySet<string> stopWords)
+    {
+        try
+        {
+            var contents = _fileSystem.ReadAllText(filePath);
+            if (string.IsNullOrWhiteSpace(contents))
+                return new Dictionary<string, int>(StringComparer.Ordinal);
+
+            return _tokenizer.Tokenize(new[] { contents }, stopWords);
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is NotSupportedException)
+        {
+            return new Dictionary<string, int>(StringComparer.Ordinal);
+        }
     }
 
     private static async Task<Dictionary<string, FileEntry>> LoadExistingFilesAsync(
@@ -294,6 +327,18 @@ public sealed class TagIndexer : ITagIndexer
         }
 
         return results;
+    }
+
+    private static async Task<int> LoadIndexVersionAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT IndexVersion FROM IndexState WHERE Id = 1;";
+        var result = await command.ExecuteScalarAsync(ct);
+        return result == null ? 0 : Convert.ToInt32(result);
     }
 
     private static async Task<long> GetOrCreateTagIdAsync(

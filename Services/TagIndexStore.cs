@@ -1,4 +1,5 @@
 // CHANGE LOG
+// - 2026-01-02 | Fix: Tag index versioning | Track index version to force content reindex.
 // - 2026-01-02 | Request: Tag search storage | Add SQLite tag index store initialization for Tags.db.
 using System;
 using System.IO;
@@ -40,7 +41,8 @@ public interface ITagIndexStore
 /// </summary>
 public sealed class TagIndexStore : ITagIndexStore
 {
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;
+    private const int DefaultIndexVersion = 1;
     private readonly IFileSystem _fileSystem;
     private readonly IAppDataStore _appDataStore;
 
@@ -97,10 +99,12 @@ CREATE TABLE IF NOT EXISTS IndexState (
     Id INTEGER PRIMARY KEY CHECK (Id = 1),
     SchemaVersion INTEGER NOT NULL,
     LastScanTicks INTEGER NOT NULL,
-    CategoriesRoot TEXT NOT NULL
+    CategoriesRoot TEXT NOT NULL,
+    IndexVersion INTEGER NOT NULL DEFAULT 1
 );";
 
         await ExecuteNonQueryAsync(connection, schemaSql, ct);
+        await EnsureIndexVersionColumnAsync(connection, ct);
 
         await ExecuteNonQueryAsync(
             connection,
@@ -110,11 +114,12 @@ CREATE TABLE IF NOT EXISTS IndexState (
         await using (var stateCommand = connection.CreateCommand())
         {
             stateCommand.CommandText = @"
-INSERT OR IGNORE INTO IndexState (Id, SchemaVersion, LastScanTicks, CategoriesRoot)
-VALUES (1, $schemaVersion, 0, $categoriesRoot);
+INSERT OR IGNORE INTO IndexState (Id, SchemaVersion, LastScanTicks, CategoriesRoot, IndexVersion)
+VALUES (1, $schemaVersion, 0, $categoriesRoot, $indexVersion);
 UPDATE IndexState SET SchemaVersion = $schemaVersion, CategoriesRoot = $categoriesRoot WHERE Id = 1;";
             stateCommand.Parameters.AddWithValue("$schemaVersion", SchemaVersion);
             stateCommand.Parameters.AddWithValue("$categoriesRoot", _appDataStore.CategoriesDir);
+            stateCommand.Parameters.AddWithValue("$indexVersion", DefaultIndexVersion);
             await stateCommand.ExecuteNonQueryAsync(ct);
         }
     }
@@ -133,5 +138,23 @@ UPDATE IndexState SET SchemaVersion = $schemaVersion, CategoriesRoot = $categori
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         await command.ExecuteNonQueryAsync(ct);
+    }
+
+    private static async Task EnsureIndexVersionColumnAsync(SqliteConnection connection, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA table_info(IndexState);";
+        await using var reader = await command.ExecuteReaderAsync(ct);
+
+        while (await reader.ReadAsync(ct))
+        {
+            if (string.Equals(reader.GetString(1), "IndexVersion", StringComparison.OrdinalIgnoreCase))
+                return;
+        }
+
+        await ExecuteNonQueryAsync(
+            connection,
+            "ALTER TABLE IndexState ADD COLUMN IndexVersion INTEGER NOT NULL DEFAULT 1;",
+            ct);
     }
 }

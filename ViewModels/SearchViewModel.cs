@@ -1,4 +1,5 @@
 // CHANGE LOG
+// - 2026-01-02 | Request: Tag indexing status | Add status message for indexing feedback.
 // - 2026-01-02 | Fix: Clear search input on add | Reset SearchQuery after adding tags.
 // - 2026-01-02 | Request: Tag search view model | Add MVVM state, suggestions, and selection logic.
 using System;
@@ -40,6 +41,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     private string _searchQuery = string.Empty;
     private SearchState _state = SearchState.Ready;
     private string? _errorMessage;
+    private string? _indexStatusMessage;
     private int _totalFiles = -1;
 
     /// <summary>
@@ -113,6 +115,28 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Human-friendly status about the most recent indexing pass.
+    /// </summary>
+    public string? IndexStatusMessage
+    {
+        get => _indexStatusMessage;
+        private set
+        {
+            if (_indexStatusMessage == value)
+                return;
+
+            _indexStatusMessage = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasIndexStatusMessage));
+        }
+    }
+
+    /// <summary>
+    /// True when there is a status message to show.
+    /// </summary>
+    public bool HasIndexStatusMessage => !string.IsNullOrWhiteSpace(_indexStatusMessage);
+
+    /// <summary>
     /// Selected tags for AND-based filtering.
     /// </summary>
     public ObservableCollection<string> SelectedTags { get; } = new();
@@ -155,18 +179,21 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     private async Task RefreshIndexAsync()
     {
         ErrorMessage = null;
+        IndexStatusMessage = "Indexing tags...";
         State = SearchState.Indexing;
 
         try
         {
             var result = await _tagIndexer.SyncAsync();
             _totalFiles = result.TotalFiles;
+            IndexStatusMessage = FormatIndexSummary(result);
             await RefreshResultsAsync();
         }
         catch (Exception ex)
         {
             _errors.Report(ex, "SearchViewModel.RefreshIndex");
             ErrorMessage = ex.Message;
+            IndexStatusMessage = "Indexing failed.";
             State = SearchState.Error;
         }
     }
@@ -285,4 +312,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
     private void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    private static string FormatIndexSummary(TagIndexSyncResult result)
+        => $"Index ready: {result.TotalFiles} files, {result.TotalTags} tags (added {result.AddedFiles}, updated {result.UpdatedFiles}, removed {result.RemovedFiles}).";
 }

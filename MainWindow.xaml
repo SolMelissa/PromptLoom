@@ -1,4 +1,5 @@
 <!-- CHANGE LOG
+- 2026-01-02 | Request: Tag indexing status | Show indexing status message in Search tab.
 - 2026-01-02 | Request: Sync app version | Update window title to 2.1.2.
 - 2026-01-02 | Fix: Tag chip commands | Bind add/remove tag buttons to ItemsControl context.
 - 2026-01-02 | Fix: Remove duplicate Search tab | Keep a single Search tab per layout.
@@ -617,12 +618,12 @@
                             </Border>
 
                             <StackPanel Grid.Row="4" Margin="0,10,0,0">
-                                <TextBlock Text="Indexing..." Opacity="0.7">
+                                <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Indexing}">
+                                                <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
@@ -1098,12 +1099,12 @@
                                     </Border>
 
                                     <StackPanel Grid.Row="4" Margin="0,10,0,0">
-                                        <TextBlock Text="Indexing..." Opacity="0.7">
+                                        <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Indexing}">
+                                                        <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
                                                             <Setter Property="Visibility" Value="Visible"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
