@@ -1,5 +1,5 @@
 // CHANGE LOG
-// - 2026-01-02 | Request: Patch version bump | Update assembly version to 1.8.2.9.
+// - 2026-01-02 | Request: Sync app version | Update assembly version to 2.1.2.
 // - 2025-12-25 | Fix: Allow test project to access internal members needed for smoke tests.
 // - 2025-12-22 | Fix: Align AssemblyVersion/FileVersion/InformationalVersion with the csproj version.
 // FIX: Allow test project to access internal members needed for smoke tests.
@@ -18,9 +18,9 @@ using System.Runtime.Versioning;
 [assembly: AssemblyTitle("PromptLoom")]
 [assembly: AssemblyCompany("PromptLoom")]
 [assembly: AssemblyProduct("PromptLoom")]
-[assembly: AssemblyVersion("1.8.2.9")]
-[assembly: AssemblyFileVersion("1.8.2.9")]
-[assembly: AssemblyInformationalVersion("1.8.2.9")]
+[assembly: AssemblyVersion("2.1.2")]
+[assembly: AssemblyFileVersion("2.1.2")]
+[assembly: AssemblyInformationalVersion("2.1.2")]
 [assembly: InternalsVisibleTo("PromptLoom.Tests")]
 
 // WPF apps don't strictly need a TargetFrameworkAttribute at runtime, but some tooling expects it.

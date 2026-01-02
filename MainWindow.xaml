@@ -1,7 +1,7 @@
 <!-- CHANGE LOG
+- 2026-01-02 | Request: Sync app version | Update window title to 2.1.2.
 - 2026-01-02 | Fix: Tag chip commands | Bind add/remove tag buttons to ItemsControl context.
 - 2026-01-02 | Fix: Remove duplicate Search tab | Keep a single Search tab per layout.
-- 2026-01-02 | Request: Tag search UI shell | Add Search tab scaffolding for tag search.
 -->
 <!-- Bugfix: Fix duplicate IconBtn resource key by renaming base style to IconBtnBase so style lookups are unambiguous. -->
 <!-- Bugfix: Allow the shared IconBtn style to apply to ToggleButton instances to prevent XamlParseException popups triggered by a Button-only style target. -->
@@ -12,7 +12,7 @@
         xmlns:conv="clr-namespace:PromptLoom.Converters"
         xmlns:controls="clr-namespace:PromptLoom.Controls"
         xmlns:viewModels="clr-namespace:PromptLoom.ViewModels"
-        Title="PromptLoom 1.8.3" Height="900" Width="1480"
+        Title="PromptLoom 2.1.2" Height="900" Width="1480"
         Background="{StaticResource BgMain}"
         WindowStartupLocation="CenterScreen">
 
