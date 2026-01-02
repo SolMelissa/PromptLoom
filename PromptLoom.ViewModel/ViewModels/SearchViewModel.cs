@@ -1,7 +1,8 @@
 // CHANGE LOG
+// - 2026-03-02 | Request: File relevance | Compute per-file relevance percentages for pills.
+// - 2026-03-02 | Request: Selectable files | Add selectable file pills with ordered selection commands.
 // - 2026-01-02 | Fix: Tag count shadowing | Avoid duplicate local names in UpdateTagCountsAsync.
 // - 2026-01-02 | Request: Tag count scope | Use global counts for suggestions before selection.
-// - 2026-01-02 | Request: Related tag relevance | Add related tag model and relevance updates.
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -135,6 +136,10 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         AddTagCommand = new RelayCommand("Search.AddTag", AddTag, errorReporter: _errors);
         RemoveTagCommand = new RelayCommand("Search.RemoveTag", RemoveTag, errorReporter: _errors);
         ClearTagsCommand = new RelayCommand("Search.ClearTags", _ => ClearTags(), errorReporter: _errors);
+        SelectFileCommand = new RelayCommand("Search.SelectFile", SelectFile, errorReporter: _errors);
+        RemoveSelectedFileCommand = new RelayCommand("Search.RemoveSelectedFile", RemoveSelectedFile, errorReporter: _errors);
+        MoveSelectedFileUpCommand = new RelayCommand("Search.MoveSelectedFileUp", MoveSelectedFileUp, errorReporter: _errors);
+        MoveSelectedFileDownCommand = new RelayCommand("Search.MoveSelectedFileDown", MoveSelectedFileDown, errorReporter: _errors);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -232,6 +237,11 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     public ObservableCollection<RelatedTagItem> RelatedTags { get; } = new();
 
     /// <summary>
+    /// Ordered list of selected files.
+    /// </summary>
+    public ObservableCollection<TagFileInfo> SelectedFiles { get; } = new();
+
+    /// <summary>
     /// Command to refresh the tag index.
     /// </summary>
     public AsyncRelayCommand RefreshCommand { get; }
@@ -250,6 +260,26 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     /// Command to clear all selected tags.
     /// </summary>
     public RelayCommand ClearTagsCommand { get; }
+
+    /// <summary>
+    /// Command to add a file to the selected list.
+    /// </summary>
+    public RelayCommand SelectFileCommand { get; }
+
+    /// <summary>
+    /// Command to remove a file from the selected list.
+    /// </summary>
+    public RelayCommand RemoveSelectedFileCommand { get; }
+
+    /// <summary>
+    /// Command to move a selected file up.
+    /// </summary>
+    public RelayCommand MoveSelectedFileUpCommand { get; }
+
+    /// <summary>
+    /// Command to move a selected file down.
+    /// </summary>
+    public RelayCommand MoveSelectedFileDownCommand { get; }
 
     /// <summary>
     /// Initializes the search state by running an index pass.
@@ -311,6 +341,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         SelectedTags.Clear();
         RelatedTags.Clear();
         Results.Clear();
+        SelectedFiles.Clear();
         _currentFilePaths = Array.Empty<string>();
         State = ResolveStateAfterSearch(0);
         _ = RefreshSuggestionsAsync();
@@ -365,18 +396,21 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         {
             Results.Clear();
             RelatedTags.Clear();
+            SelectedFiles.Clear();
             _currentFilePaths = Array.Empty<string>();
             State = ResolveStateAfterSearch(0);
             return;
         }
 
-        var results = await _tagSearchService.SearchFilesAsync(SelectedTags.Select(tag => tag.Name).ToList());
-        ReplaceCollection(Results, results);
-        _currentFilePaths = results.Select(result => result.Path).ToList();
+        var rawResults = await _tagSearchService.SearchFilesAsync(SelectedTags.Select(tag => tag.Name).ToList());
+        var scoredResults = ApplyRelevanceScores(rawResults);
+        ReplaceCollection(Results, scoredResults);
+        SyncSelectedFiles(scoredResults);
+        _currentFilePaths = scoredResults.Select(result => result.Path).ToList();
         await UpdateTagCountsAsync(SelectedTags, useAllFilesWhenEmpty: false);
         await UpdateTagCountsAsync(SuggestedTags, useAllFilesWhenEmpty: false);
-        await RefreshRelatedTagsAsync(results);
-        State = ResolveStateAfterSearch(results.Count);
+        await RefreshRelatedTagsAsync(scoredResults);
+        State = ResolveStateAfterSearch(scoredResults.Count);
     }
 
     private SearchState ResolveStateAfterSearch(int resultCount)
@@ -402,6 +436,113 @@ public sealed class SearchViewModel : INotifyPropertyChanged
             string text => text,
             _ => null
         };
+    }
+
+    private void SelectFile(object? parameter)
+    {
+        var file = ResolveFile(parameter);
+        if (file == null)
+            return;
+
+        if (SelectedFiles.Any(existing => string.Equals(existing.Path, file.Path, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        SelectedFiles.Add(file);
+    }
+
+    private void RemoveSelectedFile(object? parameter)
+    {
+        var file = ResolveFile(parameter);
+        if (file == null)
+            return;
+
+        var existing = SelectedFiles.FirstOrDefault(item => string.Equals(item.Path, file.Path, StringComparison.OrdinalIgnoreCase));
+        if (existing == null)
+            return;
+
+        SelectedFiles.Remove(existing);
+    }
+
+    private void MoveSelectedFileUp(object? parameter)
+        => MoveSelectedFile(parameter, -1);
+
+    private void MoveSelectedFileDown(object? parameter)
+        => MoveSelectedFile(parameter, 1);
+
+    private void MoveSelectedFile(object? parameter, int offset)
+    {
+        var file = ResolveFile(parameter);
+        if (file == null)
+            return;
+
+        var index = GetSelectedFileIndex(file);
+        if (index < 0)
+            return;
+
+        var targetIndex = index + offset;
+        if (targetIndex < 0 || targetIndex >= SelectedFiles.Count)
+            return;
+
+        SelectedFiles.Move(index, targetIndex);
+    }
+
+    private int GetSelectedFileIndex(TagFileInfo file)
+    {
+        for (var i = 0; i < SelectedFiles.Count; i++)
+        {
+            if (string.Equals(SelectedFiles[i].Path, file.Path, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static TagFileInfo? ResolveFile(object? parameter)
+    {
+        return parameter switch
+        {
+            TagFileInfo file => file,
+            _ => null
+        };
+    }
+
+    private static IReadOnlyList<TagFileInfo> ApplyRelevanceScores(IReadOnlyList<TagFileInfo> results)
+    {
+        if (results.Count == 0)
+            return results;
+
+        var maxMatchCount = results.Max(result => result.MatchCount);
+        if (maxMatchCount <= 0)
+            return results.Select(result => result with { RelevancePercent = 0 }).ToList();
+
+        return results
+            .Select(result => result with
+            {
+                RelevancePercent = (int)Math.Round(
+                    result.MatchCount / (double)maxMatchCount * 100d,
+                    MidpointRounding.AwayFromZero)
+            })
+            .ToList();
+    }
+
+    private void SyncSelectedFiles(IReadOnlyList<TagFileInfo> results)
+    {
+        if (SelectedFiles.Count == 0)
+            return;
+
+        var lookup = results.ToDictionary(result => result.Path, StringComparer.OrdinalIgnoreCase);
+        for (var i = SelectedFiles.Count - 1; i >= 0; i--)
+        {
+            var selected = SelectedFiles[i];
+            if (!lookup.TryGetValue(selected.Path, out var updated))
+            {
+                SelectedFiles.RemoveAt(i);
+                continue;
+            }
+
+            if (!Equals(selected, updated))
+                SelectedFiles[i] = updated;
+        }
     }
 
     private async Task RefreshRelatedTagsAsync(IReadOnlyList<TagFileInfo> results)
