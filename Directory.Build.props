@@ -1,6 +1,6 @@
 <!--
 CHANGE LOG
-- 2026-03-02 | Request: Minor version bump | Update BaseVersion to 2.3.0.
+- 2026-03-02 | Request: Patch version bump | Update BaseVersion to 2.1.1.
 - 2025-12-31 | Request: Minor version bump | Update BaseVersion to 2.2.0.
 - 2025-12-31 | Request: MVVM split | Bump BaseVersion to 2.1.0.
 -->
@@ -13,6 +13,6 @@ CHANGE LOG
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-    <BaseVersion Condition="'$(BaseVersion)' == ''">2.3.0</BaseVersion>
+    <BaseVersion Condition="'$(BaseVersion)' == ''">2.1.1</BaseVersion>
   </PropertyGroup>
 </Project>
