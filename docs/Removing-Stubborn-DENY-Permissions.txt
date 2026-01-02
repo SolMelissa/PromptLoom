@@ -1,0 +1,28 @@
+CHANGE LOG
+- 2026-01-02 | Request: ACL recovery doc | Document steps to remove stubborn DENY permissions.
+
+Removing Stubborn DENY Permissions - Quick Reference
+
+When standard icacls /remove:d commands fail (reporting "Successfully processed 0 files"),
+use this sequence:
+
+Step 1: Take Ownership
+takeown /F "C:\\Path\\To\\Directory" /R /D Y
+
+    /F - Specifies the file or directory
+    /R - Recursive (all subdirectories and files)
+    /D Y - Default answer "Yes" to prompts
+
+Step 2: Grant Full Control
+icacls "C:\\Path\\To\\Directory" /grant:r "COMPUTERNAME\\username:(OI)(CI)F" /T
+
+    /grant:r - Replace existing permissions with full control
+    (OI)(CI)F - Object Inherit, Container Inherit, Full control
+    /T - Apply recursively
+
+Step 3: Identify Unknown SIDs (Optional)
+([System.Security.Principal.SecurityIdentifier]"S-1-5-21-xxx-xxx-xxx-xxx").Translate([System.Security.Principal.NTAccount]).Value
+
+This helps identify what account the SID belongs to if it shows as a number instead of a friendly name.
+
+Note: Run PowerShell as Administrator for all commands.

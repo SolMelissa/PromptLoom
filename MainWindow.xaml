@@ -1,4 +1,5 @@
 <!-- CHANGE LOG
+- 2026-01-02 | Request: Search refresh icon | Move refresh button to status pane and use icon.
 - 2026-01-02 | Request: Tag indexing status | Show indexing status message in Search tab.
 - 2026-01-02 | Request: Sync app version | Update window title to 2.1.2.
 - 2026-01-02 | Fix: Tag chip commands | Bind add/remove tag buttons to ItemsControl context.
@@ -32,6 +33,7 @@
         <Geometry x:Key="IcoChevronRight">M 14.5,12 L 9.5,7 L 8.0,8.5 L 11.5,12 L 8.0,15.5 L 9.5,17 Z</Geometry>
         <Geometry x:Key="IcoSelectAll">M 6,7 H 18 V 9 H 6 Z M 6,11 H 18 V 13 H 6 Z M 6,15 H 18 V 17 H 6 Z M 4.5,12 L 3.2,10.7 L 2,11.9 L 4.5,14.4 L 8.7,10.2 L 7.5,9 Z</Geometry>
         <Geometry x:Key="IcoSelectNone">M 12,2.5 A 9.5,9.5 0 1 1 11.999,2.5 Z M 7,11 H 17 V 13 H 7 Z</Geometry>
+        <Geometry x:Key="IcoRefresh">M17.65,6.35A7.95,7.95 0 0,0 12,4V1L7,6l5,5V7c2.76,0 5,2.24 5,5 0,1.1 -0.36,2.12 -0.97,2.94l1.46,1.46A7.96,7.96 0 0,0 20,12c0-2.21-0.9-4.21-2.35-5.65z M6.35,17.65A7.95,7.95 0 0,0 12,20v3l5-5-5-5v3c-2.76,0-5-2.24-5-5 0-1.1 0.36-2.12 0.97-2.94L6.5,6.61A7.96,7.96 0 0,0 4,12c0,2.21 0.9,4.21 2.35,5.65z</Geometry>
 
         <!-- Round icon button style -->
         <Style x:Key="IconBtnBase" TargetType="ButtonBase">
@@ -544,7 +546,6 @@
                                              MinWidth="220"
                                              Margin="0,0,8,0"/>
                                     <Button Content="Add Tag" Margin="0,0,8,0" Command="{Binding AddTagCommand}"/>
-                                    <Button Content="Refresh" Command="{Binding RefreshCommand}"/>
                                 </DockPanel>
                                 <ItemsControl ItemsSource="{Binding SuggestedTags}" Margin="0,8,0,0">
                                     <ItemsControl.ItemsPanel>
@@ -617,56 +618,70 @@
                                 </ListBox>
                             </Border>
 
-                            <StackPanel Grid.Row="4" Margin="0,10,0,0">
-                                <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                                <TextBlock Text="No files found in Categories." Opacity="0.7">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.EmptyIndex}">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                                <TextBlock Text="No files match the selected tags." Opacity="0.7">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.NoResults}">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                                <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource AccentPink}" TextWrapping="Wrap">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Error}">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
+                            <Grid Grid.Row="4" Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="No files found in Categories." Opacity="0.7">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.EmptyIndex}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="No files match the selected tags." Opacity="0.7">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.NoResults}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource AccentPink}" TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Error}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource IconBtn}"
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Center"
+                                        ToolTip="Refresh tags"
+                                        Command="{Binding RefreshCommand}">
+                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoRefresh}"/>
+                                </Button>
+                            </Grid>
                         </Grid>
                     </Border>
                         </TabItem>
@@ -1025,7 +1040,6 @@
                                                      MinWidth="220"
                                                      Margin="0,0,8,0"/>
                                             <Button Content="Add Tag" Margin="0,0,8,0" Command="{Binding AddTagCommand}"/>
-                                            <Button Content="Refresh" Command="{Binding RefreshCommand}"/>
                                         </DockPanel>
                                         <ItemsControl ItemsSource="{Binding SuggestedTags}" Margin="0,8,0,0">
                                             <ItemsControl.ItemsPanel>
@@ -1098,56 +1112,70 @@
                                         </ListBox>
                                     </Border>
 
-                                    <StackPanel Grid.Row="4" Margin="0,10,0,0">
-                                        <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="No files found in Categories." Opacity="0.7">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.EmptyIndex}">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="No files match the selected tags." Opacity="0.7">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.NoResults}">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource AccentPink}" TextWrapping="Wrap">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Error}">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </StackPanel>
+                                    <Grid Grid.Row="4" Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="No files found in Categories." Opacity="0.7">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.EmptyIndex}">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="No files match the selected tags." Opacity="0.7">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.NoResults}">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource AccentPink}" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Error}">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource IconBtn}"
+                                                Margin="8,0,0,0"
+                                                VerticalAlignment="Center"
+                                                ToolTip="Refresh tags"
+                                                Command="{Binding RefreshCommand}">
+                                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoRefresh}"/>
+                                        </Button>
+                                    </Grid>
                                 </Grid>
                             </Border>
                         </TabItem>
