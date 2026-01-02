@@ -1,4 +1,9 @@
 <!-- CHANGE LOG
+- 2026-03-02 | Request: Feature version bump | Update window title to 2.2.0.
+- 2026-03-02 | Request: File relevance pills | Add relevance percent to found/selected file pills.
+- 2026-03-02 | Request: File pill labels | Show path portion after Categories with wrapping.
+- 2026-03-02 | Request: Selected file pills | Use pill buttons with move/remove controls.
+- 2026-03-02 | Request: Search file selection | Add selectable file pills with ordered selection list.
 - 2026-03-02 | Fix: Resolve SearchState binding | Point viewModels namespace at PromptLoom.ViewModel assembly.
 - 2026-03-02 | Request: Deduplicate prompt panel | Reuse shared prompt UI control for both layouts.
 - 2026-01-02 | Request: Related tag relevance | Show related tags with relevance percent.
@@ -20,7 +25,7 @@
         xmlns:conv="clr-namespace:PromptLoom.Converters"
         xmlns:controls="clr-namespace:PromptLoom.Controls"
         xmlns:viewModels="clr-namespace:PromptLoom.ViewModels;assembly=PromptLoom.ViewModel"
-        Title="PromptLoom 2.1.2" Height="900" Width="1480"
+        Title="PromptLoom 2.2.0" Height="900" Width="1480"
         Background="{StaticResource BgMain}"
         WindowStartupLocation="CenterScreen">
 
@@ -29,6 +34,7 @@
         <conv:PastelByIndexConverter x:Key="PastelByIndex"/>
         <conv:AspectToVisibilityConverter x:Key="AspectToVis"/>
         <conv:OneLineTextConverter x:Key="OneLine"/>
+        <conv:CategoryPathConverter x:Key="CategoryPathConverter"/>
 
         <DataTemplate x:Key="SwarmAssetCardTemplate">
             <Border Background="#14000000" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
@@ -650,19 +656,92 @@
                             </StackPanel>
 
                             <Border Grid.Row="3" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="10" Padding="8">
-                                <ListBox ItemsSource="{Binding Results}"
-                                         Background="Transparent"
-                                         BorderThickness="0"
-                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Margin="0,0,0,6">
-                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
-                                                <TextBlock Text="{Binding Path}" Opacity="0.6" FontSize="11" TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="16"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Found files" Opacity="0.7" Margin="0,0,0,6"/>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding Results}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Padding="10,4"
+                                                                Margin="0,0,6,6"
+                                                                Background="{StaticResource InputCyan}"
+                                                                ToolTip="{Binding Path}"
+                                                                Command="{Binding DataContext.SelectFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding}">
+                                                            <Button.Content>
+                                                                <TextBlock TextWrapping="Wrap" Width="240">
+                                                                    <Run Text="{Binding Path, Converter={StaticResource CategoryPathConverter}}"/>
+                                                                    <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
+                                                                </TextBlock>
+                                                            </Button.Content>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Selected files" Opacity="0.7" Margin="0,0,0,6"/>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding SelectedFiles}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                            <Button Padding="10,4"
+                                                                    Margin="0,0,8,0"
+                                                                    Background="{StaticResource InputCyan}"
+                                                                    ToolTip="{Binding Path}"
+                                                                    Command="{Binding DataContext.RemoveSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}">
+                                                                <Button.Content>
+                                                                    <TextBlock TextWrapping="Wrap" Width="240">
+                                                                        <Run Text="{Binding Path, Converter={StaticResource CategoryPathConverter}}"/>
+                                                                        <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
+                                                                    </TextBlock>
+                                                                </Button.Content>
+                                                            </Button>
+                                                            <Button Content="↑"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Margin="0,0,4,0"
+                                                                    Command="{Binding DataContext.MoveSelectedFileUpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="↓"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Margin="0,0,4,0"
+                                                                    Command="{Binding DataContext.MoveSelectedFileDownCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="x"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Command="{Binding DataContext.RemoveSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Grid>
                             </Border>
 
                             <Grid Grid.Row="4" Margin="0,10,0,0">
