@@ -1,7 +1,7 @@
 // CHANGE LOG
+// - 2026-03-02 | Request: Batch qty slider | Clamp batch quantity to 2-50.
 // - 2026-03-02 | Fix: Restore AutoSave helper | Reintroduce AutoSave to funnel into the debounced queue.
 // - 2025-12-31 | Request: SwarmUI cards + toggles | Add model/LoRA cards, seed toggle, and persistence fixes.
-// - 2025-12-31 | Request: SwarmUI progress + seed split | Track steps per image and separate prompt/image seeds.
 // FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
 // CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
 // CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
@@ -243,7 +243,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public int BatchQty
     {
         get => _batchQty;
-        set { _batchQty = Math.Clamp(value, 1, 999); OnPropertyChanged(); QueueAutoSave(); }
+        set { _batchQty = Math.Clamp(value, 2, 50); OnPropertyChanged(); QueueAutoSave(); }
     }
 
     private bool _batchRandomizePrompts = true;
@@ -1087,7 +1087,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
             SwarmSelectedLora2 = s.SwarmSelectedLora2 ?? "";
             SwarmLora2Weight = s.SwarmLora2Weight;
 
-            BatchQty = Math.Max(1, s.BatchQty);
+            BatchQty = Math.Clamp(s.BatchQty, 2, 50);
             BatchRandomizePrompts = s.BatchRandomizePrompts;
         }
         catch (Exception ex)

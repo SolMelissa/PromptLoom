@@ -1,4 +1,5 @@
 // CHANGE LOG
+// - 2026-03-02 | Request: Batch qty slider | Default batch quantity to 2.
 // - 2025-12-31 | Request: Persist SwarmUI toggles | Store send-seed toggle and SwarmUI selections.
 // - 2025-12-25 | Fix: User settings store seam | Add IUserSettingsStore and a default implementation.
 // FIX: Introduce user settings store seam to allow in-memory testing.
@@ -87,6 +88,6 @@ public sealed class UserSettings
     public string? SwarmSelectedLora2 { get; set; }
     public double SwarmLora2Weight { get; set; } = 1.0;
 
-    public int BatchQty { get; set; } = 1;
+    public int BatchQty { get; set; } = 2;
     public bool BatchRandomizePrompts { get; set; }
 }
