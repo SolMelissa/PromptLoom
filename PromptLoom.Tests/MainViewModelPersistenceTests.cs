@@ -1,3 +1,5 @@
+// CHANGE LOG
+// - 2025-12-31 | Request: MVVM split | Update project root sentinel to PromptLoom.View.csproj in persistence tests.
 // TEST: Add persistence-related view model tests using file system and AppData fakes.
 
 using System;
@@ -29,7 +31,7 @@ public class MainViewModelPersistenceTests
         var root = "C:\\FakeRoot";
         var appData = new FakeAppDataStore(root);
         var fs = new FakeFileSystem();
-        fs.AddFile(Path.Combine(AppContext.BaseDirectory, "PromptLoom.csproj"), "");
+        fs.AddFile(Path.Combine(AppContext.BaseDirectory, "PromptLoom.View.csproj"), "");
         var settings = new UserSettings
         {
             SwarmUrl = "http://localhost:1234",
@@ -60,7 +62,7 @@ public class MainViewModelPersistenceTests
         var root = "C:\\FakeRoot";
         var appData = new FakeAppDataStore(root);
         var fs = new FakeFileSystem();
-        fs.AddFile(Path.Combine(AppContext.BaseDirectory, "PromptLoom.csproj"), "");
+        fs.AddFile(Path.Combine(AppContext.BaseDirectory, "PromptLoom.View.csproj"), "");
         var store = new FakeUserSettingsStore();
 
         var vm = new MainViewModel(

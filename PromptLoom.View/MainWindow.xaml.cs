@@ -1,8 +1,14 @@
+// CHANGE LOG
+// - 2025-12-29 | Request: Versioned titlebar | Display MAJOR.MINOR.PATCH #COMMITCOUNT in the window title.
+// - 2025-12-25 | Request: Allow injected MainViewModel | Enabled constructor injection for DI/testing.
+//
 // FIX: Allow MainWindow to accept an injected MainViewModel instead of constructing it directly.
 // CAUSE: View-owned VM creation was an MVVM violation and blocked simple DI/testing.
 // CHANGE: Add constructor injection and reuse existing deferred Initialize. 2025-12-25
 
 using System;
+using System.Diagnostics;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -26,6 +32,7 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         ErrorReporter.Instance.Info("MainWindow ctor begin");
         InitializeComponent();
+        Title = BuildWindowTitle();
         ErrorReporter.Instance.Info("MainWindow InitializeComponent done");
 
         // Lightweight global UI telemetry hooks.
@@ -67,6 +74,19 @@ public partial class MainWindow : Window
     public MainWindow()
         : this(null)
     {
+    }
+
+    private static string BuildWindowTitle()
+    {
+        var fileVersion = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location).FileVersion;
+        if (string.IsNullOrWhiteSpace(fileVersion))
+            return "PromptLoom";
+
+        var parts = fileVersion.Split('.');
+        if (parts.Length < 4)
+            return $"PromptLoom {fileVersion}";
+
+        return $"PromptLoom {parts[0]}.{parts[1]}.{parts[2]} #{parts[3]}";
     }
 
     private void OnAnyButtonClicked(object sender, RoutedEventArgs e)
