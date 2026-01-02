@@ -1,7 +1,7 @@
 // CHANGE LOG
-// - 2026-01-02 | Request: Tag indexing status | Add status message for indexing feedback.
-// - 2026-01-02 | Fix: Clear search input on add | Reset SearchQuery after adding tags.
-// - 2026-01-02 | Request: Tag search view model | Add MVVM state, suggestions, and selection logic.
+// - 2026-01-02 | Fix: Tag count shadowing | Avoid duplicate local names in UpdateTagCountsAsync.
+// - 2026-01-02 | Request: Tag count scope | Use global counts for suggestions before selection.
+// - 2026-01-02 | Request: Related tag relevance | Add related tag model and relevance updates.
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -27,11 +27,85 @@ public enum SearchState
 }
 
 /// <summary>
+/// Tag display item with a reference count.
+/// </summary>
+public sealed class TagDisplayItem : INotifyPropertyChanged
+{
+    private int _count;
+
+    public TagDisplayItem(string name, int count = 0)
+    {
+        Name = name;
+        _count = count;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>
+    /// Tag identifier.
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Number of files in the current result list that reference this tag.
+    /// </summary>
+    public int Count
+    {
+        get => _count;
+        set
+        {
+            if (_count == value)
+                return;
+
+            _count = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DisplayText));
+        }
+    }
+
+    /// <summary>
+    /// Tag label with the count appended.
+    /// </summary>
+    public string DisplayText => $"{Name} ({Count})";
+
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+/// <summary>
+/// Related tag display item with relevance percentage.
+/// </summary>
+public sealed class RelatedTagItem
+{
+    public RelatedTagItem(string name, int relevancePercent)
+    {
+        Name = name;
+        RelevancePercent = relevancePercent;
+    }
+
+    /// <summary>
+    /// Tag identifier.
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Relevance percentage for the current selection.
+    /// </summary>
+    public int RelevancePercent { get; }
+
+    /// <summary>
+    /// Tag label with the relevance percentage appended.
+    /// </summary>
+    public string DisplayText => $"{Name} ({RelevancePercent}%)";
+}
+
+/// <summary>
 /// View model for tag-based search.
 /// </summary>
 public sealed class SearchViewModel : INotifyPropertyChanged
 {
     private const int SuggestionLimit = 20;
+    private const int RelatedLimit = 12;
 
     private readonly ITagIndexer _tagIndexer;
     private readonly ITagSearchService _tagSearchService;
@@ -43,6 +117,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     private string? _errorMessage;
     private string? _indexStatusMessage;
     private int _totalFiles = -1;
+    private IReadOnlyList<string> _currentFilePaths = Array.Empty<string>();
 
     /// <summary>
     /// Creates a new search view model.
@@ -139,17 +214,22 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     /// <summary>
     /// Selected tags for AND-based filtering.
     /// </summary>
-    public ObservableCollection<string> SelectedTags { get; } = new();
+    public ObservableCollection<TagDisplayItem> SelectedTags { get; } = new();
 
     /// <summary>
     /// Suggestions for the current query.
     /// </summary>
-    public ObservableCollection<string> SuggestedTags { get; } = new();
+    public ObservableCollection<TagDisplayItem> SuggestedTags { get; } = new();
 
     /// <summary>
     /// Files matching the current selection.
     /// </summary>
     public ObservableCollection<TagFileInfo> Results { get; } = new();
+
+    /// <summary>
+    /// Related tags for the current selection.
+    /// </summary>
+    public ObservableCollection<RelatedTagItem> RelatedTags { get; } = new();
 
     /// <summary>
     /// Command to refresh the tag index.
@@ -200,24 +280,25 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
     private void AddTag(object? parameter)
     {
-        var tag = NormalizeTag(parameter as string ?? SearchQuery);
+        var tag = NormalizeTag(ResolveTagName(parameter) ?? SearchQuery);
         SearchQuery = string.Empty;
         if (tag.Length == 0)
             return;
 
-        if (SelectedTags.Any(existing => string.Equals(existing, tag, StringComparison.OrdinalIgnoreCase)))
+        if (SelectedTags.Any(existing => string.Equals(existing.Name, tag, StringComparison.OrdinalIgnoreCase)))
             return;
 
-        SelectedTags.Add(tag);
+        SelectedTags.Add(new TagDisplayItem(tag));
         _ = RefreshResultsAsync();
     }
 
     private void RemoveTag(object? parameter)
     {
-        if (parameter is not string tag)
+        var tag = ResolveTagName(parameter);
+        if (tag == null)
             return;
 
-        var existing = SelectedTags.FirstOrDefault(value => string.Equals(value, tag, StringComparison.OrdinalIgnoreCase));
+        var existing = SelectedTags.FirstOrDefault(value => string.Equals(value.Name, tag, StringComparison.OrdinalIgnoreCase));
         if (existing == null)
             return;
 
@@ -228,7 +309,9 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     private void ClearTags()
     {
         SelectedTags.Clear();
+        RelatedTags.Clear();
         Results.Clear();
+        _currentFilePaths = Array.Empty<string>();
         State = ResolveStateAfterSearch(0);
         _ = RefreshSuggestionsAsync();
     }
@@ -253,9 +336,10 @@ public sealed class SearchViewModel : INotifyPropertyChanged
                 return;
 
             var filtered = suggestions.Where(suggestion =>
-                !SelectedTags.Any(selected => string.Equals(selected, suggestion, StringComparison.OrdinalIgnoreCase)));
+                !SelectedTags.Any(selected => string.Equals(selected.Name, suggestion, StringComparison.OrdinalIgnoreCase)));
 
-            ReplaceCollection(SuggestedTags, filtered);
+            ReplaceCollection(SuggestedTags, filtered.Select(tag => new TagDisplayItem(tag)));
+            await UpdateTagCountsAsync(SuggestedTags, useAllFilesWhenEmpty: SelectedTags.Count == 0);
         }
         catch (OperationCanceledException)
         {
@@ -280,12 +364,18 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         if (SelectedTags.Count == 0)
         {
             Results.Clear();
+            RelatedTags.Clear();
+            _currentFilePaths = Array.Empty<string>();
             State = ResolveStateAfterSearch(0);
             return;
         }
 
-        var results = await _tagSearchService.SearchFilesAsync(SelectedTags.ToList());
+        var results = await _tagSearchService.SearchFilesAsync(SelectedTags.Select(tag => tag.Name).ToList());
         ReplaceCollection(Results, results);
+        _currentFilePaths = results.Select(result => result.Path).ToList();
+        await UpdateTagCountsAsync(SelectedTags, useAllFilesWhenEmpty: false);
+        await UpdateTagCountsAsync(SuggestedTags, useAllFilesWhenEmpty: false);
+        await RefreshRelatedTagsAsync(results);
         State = ResolveStateAfterSearch(results.Count);
     }
 
@@ -302,6 +392,62 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
     private static string NormalizeTag(string tag)
         => tag.Trim().ToLowerInvariant();
+
+    private static string? ResolveTagName(object? parameter)
+    {
+        return parameter switch
+        {
+            TagDisplayItem item => item.Name,
+            RelatedTagItem item => item.Name,
+            string text => text,
+            _ => null
+        };
+    }
+
+    private async Task RefreshRelatedTagsAsync(IReadOnlyList<TagFileInfo> results)
+    {
+        if (SelectedTags.Count == 0 || results.Count == 0)
+        {
+            RelatedTags.Clear();
+            return;
+        }
+
+        var related = await _tagSearchService.GetRelatedTagsAsync(
+            SelectedTags.Select(tag => tag.Name).ToList(),
+            results.Select(result => result.Path).ToList(),
+            RelatedLimit);
+
+        ReplaceCollection(RelatedTags, related.Select(item => new RelatedTagItem(item.Name, item.RelevancePercent)));
+    }
+
+    private async Task UpdateTagCountsAsync(IReadOnlyCollection<TagDisplayItem> tags, bool useAllFilesWhenEmpty)
+    {
+        if (tags.Count == 0)
+            return;
+
+        if (_currentFilePaths.Count == 0)
+        {
+            if (useAllFilesWhenEmpty)
+            {
+                var allTagNames = tags.Select(tag => tag.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                var allCounts = await _tagSearchService.CountTagReferencesAllFilesAsync(allTagNames);
+                foreach (var tag in tags)
+                    tag.Count = allCounts.TryGetValue(tag.Name, out var count) ? count : 0;
+                return;
+            }
+            else
+            {
+                foreach (var tag in tags)
+                    tag.Count = 0;
+                return;
+            }
+        }
+
+        var scopedTagNames = tags.Select(tag => tag.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var scopedCounts = await _tagSearchService.CountTagReferencesAsync(scopedTagNames, _currentFilePaths);
+        foreach (var tag in tags)
+            tag.Count = scopedCounts.TryGetValue(tag.Name, out var count) ? count : 0;
+    }
 
     private static void ReplaceCollection<T>(ObservableCollection<T> target, IEnumerable<T> items)
     {

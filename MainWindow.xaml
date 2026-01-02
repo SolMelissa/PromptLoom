@@ -1,4 +1,6 @@
 <!-- CHANGE LOG
+- 2026-01-02 | Request: Related tag relevance | Show related tags with relevance percent.
+- 2026-01-02 | Request: Tag counts in UI | Show tag counts and match totals in Search.
 - 2026-01-02 | Request: Search refresh icon | Move refresh button to status pane and use icon.
 - 2026-01-02 | Request: Tag indexing status | Show indexing status message in Search tab.
 - 2026-01-02 | Request: Sync app version | Update window title to 2.1.2.
@@ -555,11 +557,11 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Button Content="{Binding}"
+                                            <Button Content="{Binding DisplayText}"
                                                     Padding="8,4"
                                                     Margin="0,0,6,6"
                                                     Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding}"/>
+                                                    CommandParameter="{Binding Name}"/>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -577,13 +579,13 @@
                                         <DataTemplate>
                                             <Border Background="{StaticResource InputCyan}" CornerRadius="10" Padding="6,3" Margin="0,0,6,6">
                                                 <DockPanel>
-                                                    <TextBlock Text="{Binding}" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="{Binding DisplayText}" Margin="0,0,6,0"/>
                                                     <Button Content="x"
                                                             Padding="0"
                                                             Width="18"
                                                             Height="18"
                                                             Command="{Binding DataContext.RemoveTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                            CommandParameter="{Binding}"/>
+                                                            CommandParameter="{Binding Name}"/>
                                                 </DockPanel>
                                             </Border>
                                         </DataTemplate>
@@ -598,7 +600,36 @@
                                         BorderThickness="1"
                                         CornerRadius="10"
                                         Padding="8">
-                                    <TextBlock Text="Related tags will appear here." Opacity="0.6"/>
+                                    <Grid>
+                                        <ItemsControl ItemsSource="{Binding RelatedTags}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Content="{Binding DisplayText}"
+                                                            Padding="8,4"
+                                                            Margin="0,0,6,6"
+                                                            Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding Name}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Text="Related tags will appear here." Opacity="0.6">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding RelatedTags.Count}" Value="0">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
                                 </Border>
                             </StackPanel>
 
@@ -610,7 +641,7 @@
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <StackPanel Margin="0,0,0,6">
-                                                <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
                                                 <TextBlock Text="{Binding Path}" Opacity="0.6" FontSize="11" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                         </DataTemplate>
@@ -1049,11 +1080,11 @@
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Button Content="{Binding}"
+                                                    <Button Content="{Binding DisplayText}"
                                                             Padding="8,4"
                                                             Margin="0,0,6,6"
                                                             Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                            CommandParameter="{Binding}"/>
+                                                            CommandParameter="{Binding Name}"/>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
@@ -1071,13 +1102,13 @@
                                                 <DataTemplate>
                                                     <Border Background="{StaticResource InputCyan}" CornerRadius="10" Padding="6,3" Margin="0,0,6,6">
                                                         <DockPanel>
-                                                            <TextBlock Text="{Binding}" Margin="0,0,6,0"/>
+                                                            <TextBlock Text="{Binding DisplayText}" Margin="0,0,6,0"/>
                                                             <Button Content="x"
                                                                     Padding="0"
                                                                     Width="18"
                                                                     Height="18"
                                                                     Command="{Binding DataContext.RemoveTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                    CommandParameter="{Binding}"/>
+                                                                    CommandParameter="{Binding Name}"/>
                                                         </DockPanel>
                                                     </Border>
                                                 </DataTemplate>
@@ -1092,7 +1123,36 @@
                                                 BorderThickness="1"
                                                 CornerRadius="10"
                                                 Padding="8">
-                                            <TextBlock Text="Related tags will appear here." Opacity="0.6"/>
+                                            <Grid>
+                                                <ItemsControl ItemsSource="{Binding RelatedTags}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel/>
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Button Content="{Binding DisplayText}"
+                                                                    Padding="8,4"
+                                                                    Margin="0,0,6,6"
+                                                                    Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding Name}"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <TextBlock Text="Related tags will appear here." Opacity="0.6">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding RelatedTags.Count}" Value="0">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Grid>
                                         </Border>
                                     </StackPanel>
 
@@ -1104,7 +1164,7 @@
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Margin="0,0,0,6">
-                                                        <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
                                                         <TextBlock Text="{Binding Path}" Opacity="0.6" FontSize="11" TextTrimming="CharacterEllipsis"/>
                                                     </StackPanel>
                                                 </DataTemplate>

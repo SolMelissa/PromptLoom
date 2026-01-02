@@ -1,7 +1,7 @@
 // CHANGE LOG
+// - 2026-01-02 | Request: Tag source counts | Track filename/path/content counts for weighting.
 // - 2026-01-02 | Fix: Content tag reindex | Force a full rescan when tag index version changes.
 // - 2026-01-02 | Request: Content tag indexing | Include file contents in tag counts.
-// - 2026-01-02 | Request: Tag search indexing | Add tag indexing pipeline with DB sync and counts.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -40,7 +40,7 @@ public interface ITagIndexer
 /// </summary>
 public sealed class TagIndexer : ITagIndexer
 {
-    private const int CurrentIndexVersion = 2;
+    private const int CurrentIndexVersion = 3;
     private static readonly SemaphoreSlim IndexLock = new(1, 1);
 
     private readonly ITagIndexStore _tagIndexStore;
@@ -153,13 +153,20 @@ public sealed class TagIndexer : ITagIndexer
             await using var insertFileTagCommand = CreateCommand(
                 connection,
                 transaction,
-                "INSERT INTO FileTags (FileId, TagId, OccurrenceCount) VALUES ($fileId, $tagId, $count);",
+                "INSERT INTO FileTags (FileId, TagId, OccurrenceCount, FileNameCount, PathCount, ContentCount) " +
+                "VALUES ($fileId, $tagId, $count, $fileNameCount, $pathCount, $contentCount);",
                 "$fileId",
                 "$tagId",
                 "$count",
                 out var insertFileIdParam,
                 out var insertTagIdParam,
-                out var insertCountParam);
+                out var insertCountParam,
+                "$fileNameCount",
+                "$pathCount",
+                "$contentCount",
+                out var insertFileNameCountParam,
+                out var insertPathCountParam,
+                out var insertContentCountParam);
 
             var tagIdCache = new Dictionary<string, long>(StringComparer.Ordinal);
             foreach (var snapshot in snapshots.Values)
@@ -192,6 +199,7 @@ public sealed class TagIndexer : ITagIndexer
                 var tagCounts = BuildTagCounts(categoriesRoot, snapshot.Path, stopWords);
                 foreach (var entry in tagCounts)
                 {
+                    var breakdown = entry.Value;
                     var tagId = await GetOrCreateTagIdAsync(
                         entry.Key,
                         insertTagCommand,
@@ -203,7 +211,10 @@ public sealed class TagIndexer : ITagIndexer
 
                     insertFileIdParam.Value = fileId;
                     insertTagIdParam.Value = tagId;
-                    insertCountParam.Value = entry.Value;
+                    insertCountParam.Value = breakdown.TotalCount;
+                    insertFileNameCountParam.Value = breakdown.FileNameCount;
+                    insertPathCountParam.Value = breakdown.PathCount;
+                    insertContentCountParam.Value = breakdown.ContentCount;
                     await insertFileTagCommand.ExecuteNonQueryAsync(ct);
                 }
             }
@@ -261,32 +272,26 @@ public sealed class TagIndexer : ITagIndexer
         return snapshots;
     }
 
-    private IReadOnlyDictionary<string, int> BuildTagCounts(string categoriesRoot, string filePath, IReadOnlySet<string> stopWords)
+    private IReadOnlyDictionary<string, TagCountBreakdown> BuildTagCounts(string categoriesRoot, string filePath, IReadOnlySet<string> stopWords)
     {
         var relativePath = Path.GetRelativePath(categoriesRoot, filePath);
         var segments = relativePath.Split(
             new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
             StringSplitOptions.RemoveEmptyEntries);
 
-        var tokenSegments = new List<string>(segments.Length);
-        for (var i = 0; i < segments.Length; i++)
-        {
-            var segment = segments[i];
-            if (i == segments.Length - 1)
-                segment = Path.GetFileNameWithoutExtension(segment);
+        var fileNameSegment = segments.Length == 0
+            ? Path.GetFileNameWithoutExtension(filePath)
+            : Path.GetFileNameWithoutExtension(segments[^1]);
+        var pathSegments = segments.Length <= 1 ? Array.Empty<string>() : segments[..^1];
 
-            tokenSegments.Add(segment);
-        }
-
-        var counts = new Dictionary<string, int>(_tokenizer.Tokenize(tokenSegments, stopWords), StringComparer.Ordinal);
+        var fileNameCounts = _tokenizer.Tokenize(new[] { fileNameSegment }, stopWords);
+        var pathCounts = _tokenizer.Tokenize(pathSegments, stopWords);
         var contentCounts = TokenizeFileContents(filePath, stopWords);
-        foreach (var entry in contentCounts)
-        {
-            if (counts.TryGetValue(entry.Key, out var existing))
-                counts[entry.Key] = existing + entry.Value;
-            else
-                counts[entry.Key] = entry.Value;
-        }
+
+        var counts = new Dictionary<string, TagCountBreakdown>(StringComparer.Ordinal);
+        MergeCounts(counts, fileNameCounts, (breakdown, value) => breakdown.FileNameCount += value);
+        MergeCounts(counts, pathCounts, (breakdown, value) => breakdown.PathCount += value);
+        MergeCounts(counts, contentCounts, (breakdown, value) => breakdown.ContentCount += value);
 
         return counts;
     }
@@ -408,6 +413,47 @@ public sealed class TagIndexer : ITagIndexer
         return command;
     }
 
+    private static SqliteCommand CreateCommand(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string sql,
+        string param1Name,
+        string param2Name,
+        string param3Name,
+        out SqliteParameter param1,
+        out SqliteParameter param2,
+        out SqliteParameter param3,
+        string param4Name,
+        string param5Name,
+        string param6Name,
+        out SqliteParameter param4,
+        out SqliteParameter param5,
+        out SqliteParameter param6)
+    {
+        var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        param1 = command.CreateParameter();
+        param2 = command.CreateParameter();
+        param3 = command.CreateParameter();
+        param4 = command.CreateParameter();
+        param5 = command.CreateParameter();
+        param6 = command.CreateParameter();
+        param1.ParameterName = param1Name;
+        param2.ParameterName = param2Name;
+        param3.ParameterName = param3Name;
+        param4.ParameterName = param4Name;
+        param5.ParameterName = param5Name;
+        param6.ParameterName = param6Name;
+        command.Parameters.Add(param1);
+        command.Parameters.Add(param2);
+        command.Parameters.Add(param3);
+        command.Parameters.Add(param4);
+        command.Parameters.Add(param5);
+        command.Parameters.Add(param6);
+        return command;
+    }
+
     private static async Task ExecuteNonQueryAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
@@ -439,4 +485,29 @@ public sealed class TagIndexer : ITagIndexer
     private sealed record FileSnapshot(string Path, string FileName, long LastWriteTicks);
 
     private sealed record FileEntry(long Id, long LastWriteTicks);
+
+    private sealed class TagCountBreakdown
+    {
+        public int FileNameCount { get; set; }
+        public int PathCount { get; set; }
+        public int ContentCount { get; set; }
+        public int TotalCount => FileNameCount + PathCount + ContentCount;
+    }
+
+    private static void MergeCounts(
+        IDictionary<string, TagCountBreakdown> target,
+        IReadOnlyDictionary<string, int> counts,
+        Action<TagCountBreakdown, int> addCount)
+    {
+        foreach (var entry in counts)
+        {
+            if (!target.TryGetValue(entry.Key, out var breakdown))
+            {
+                breakdown = new TagCountBreakdown();
+                target[entry.Key] = breakdown;
+            }
+
+            addCount(breakdown, entry.Value);
+        }
+    }
 }

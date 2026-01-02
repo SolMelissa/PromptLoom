@@ -1,6 +1,6 @@
 // CHANGE LOG
+// - 2026-01-02 | Request: Tag source counts | Store filename/path/content counts per tag.
 // - 2026-01-02 | Fix: Tag index versioning | Track index version to force content reindex.
-// - 2026-01-02 | Request: Tag search storage | Add SQLite tag index store initialization for Tags.db.
 using System;
 using System.IO;
 using System.Threading;
@@ -41,8 +41,8 @@ public interface ITagIndexStore
 /// </summary>
 public sealed class TagIndexStore : ITagIndexStore
 {
-    private const int SchemaVersion = 2;
-    private const int DefaultIndexVersion = 1;
+    private const int SchemaVersion = 3;
+    private const int DefaultIndexVersion = 3;
     private readonly IFileSystem _fileSystem;
     private readonly IAppDataStore _appDataStore;
 
@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS FileTags (
     FileId INTEGER NOT NULL,
     TagId INTEGER NOT NULL,
     OccurrenceCount INTEGER NOT NULL,
+    FileNameCount INTEGER NOT NULL DEFAULT 0,
+    PathCount INTEGER NOT NULL DEFAULT 0,
+    ContentCount INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (FileId, TagId),
     FOREIGN KEY (FileId) REFERENCES Files(Id) ON DELETE CASCADE,
     FOREIGN KEY (TagId) REFERENCES Tags(Id) ON DELETE CASCADE
@@ -105,6 +108,7 @@ CREATE TABLE IF NOT EXISTS IndexState (
 
         await ExecuteNonQueryAsync(connection, schemaSql, ct);
         await EnsureIndexVersionColumnAsync(connection, ct);
+        await EnsureFileTagColumnsAsync(connection, ct);
 
         await ExecuteNonQueryAsync(
             connection,
@@ -156,5 +160,40 @@ UPDATE IndexState SET SchemaVersion = $schemaVersion, CategoriesRoot = $categori
             connection,
             "ALTER TABLE IndexState ADD COLUMN IndexVersion INTEGER NOT NULL DEFAULT 1;",
             ct);
+    }
+
+    private static async Task EnsureFileTagColumnsAsync(SqliteConnection connection, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA table_info(FileTags);";
+        await using var reader = await command.ExecuteReaderAsync(ct);
+
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (await reader.ReadAsync(ct))
+            columns.Add(reader.GetString(1));
+
+        if (!columns.Contains("FileNameCount"))
+        {
+            await ExecuteNonQueryAsync(
+                connection,
+                "ALTER TABLE FileTags ADD COLUMN FileNameCount INTEGER NOT NULL DEFAULT 0;",
+                ct);
+        }
+
+        if (!columns.Contains("PathCount"))
+        {
+            await ExecuteNonQueryAsync(
+                connection,
+                "ALTER TABLE FileTags ADD COLUMN PathCount INTEGER NOT NULL DEFAULT 0;",
+                ct);
+        }
+
+        if (!columns.Contains("ContentCount"))
+        {
+            await ExecuteNonQueryAsync(
+                connection,
+                "ALTER TABLE FileTags ADD COLUMN ContentCount INTEGER NOT NULL DEFAULT 0;",
+                ct);
+        }
     }
 }
