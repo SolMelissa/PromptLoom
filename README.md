@@ -1,4 +1,7 @@
-# PromptLoom 1.5.1 (Windows 11)
+<!-- CHANGE LOG
+- 2026-01-02 | Request: Sync app version | Update README version header to 2.1.2.
+-->
+# PromptLoom 2.1.2 (Windows 11)
 
 WPF (.NET 8) prompt builder driven by ComfyUI-style wildcard `.txt` files arranged in folders.
 
