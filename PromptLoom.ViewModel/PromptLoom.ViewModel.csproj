@@ -1,5 +1,6 @@
 <!--
 CHANGE LOG
+- 2026-01-05 | Fix: Parallel build failure | Disable parallel project reference builds to avoid MSBuild task failures.
 - 2025-12-31 | Request: MVVM split | Add ViewModel project container.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
@@ -8,6 +9,7 @@ CHANGE LOG
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <BuildInParallel>false</BuildInParallel>
   </PropertyGroup>
 
   <ItemGroup>

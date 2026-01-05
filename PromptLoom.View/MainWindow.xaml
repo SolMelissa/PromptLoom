@@ -1,20 +1,7 @@
 <!-- CHANGE LOG
-- 2026-03-02 | Request: Feature version bump | Update window title to 2.2.0.
-- 2026-03-02 | Request: File relevance pills | Add relevance percent to found/selected file pills.
-- 2026-03-02 | Request: File pill labels | Show path portion after Categories with wrapping.
-- 2026-03-02 | Request: Selected file pills | Use pill buttons with move/remove controls.
+- 2026-01-05 | Fix: XAML parse failure | Replace invalid button glyphs with ASCII arrows.
+- 2026-03-05 | Request: Decouple views from generation | Remove Simple/Advanced tabs from main window.
 - 2026-03-02 | Request: Search file selection | Add selectable file pills with ordered selection list.
-- 2026-03-02 | Fix: Resolve SearchState binding | Point viewModels namespace at PromptLoom.ViewModel assembly.
-- 2026-03-02 | Request: Deduplicate prompt panel | Reuse shared prompt UI control for both layouts.
-- 2026-01-02 | Request: Related tag relevance | Show related tags with relevance percent.
-- 2026-01-02 | Request: Tag counts in UI | Show tag counts and match totals in Search.
-- 2026-01-02 | Request: Search refresh icon | Move refresh button to status pane and use icon.
-- 2026-01-02 | Request: Tag indexing status | Show indexing status message in Search tab.
-- 2026-01-02 | Request: Sync app version | Update window title to 2.1.2.
-- 2026-01-02 | Fix: Tag chip commands | Bind add/remove tag buttons to ItemsControl context.
-- 2026-01-02 | Fix: Remove duplicate Search tab | Keep a single Search tab per layout.
-- 2025-12-31 | Request: Single-image label sizing | Align small-batch labels with thumbnail height.
-- 2025-12-31 | Request: SwarmUI cards + toggles | Add model/LoRA cards and send toggles.
 -->
 <!-- Bugfix: Fix duplicate IconBtn resource key by renaming base style to IconBtnBase so style lookups are unambiguous. -->
 <!-- Bugfix: Allow the shared IconBtn style to apply to ToggleButton instances to prevent XamlParseException popups triggered by a Button-only style target. -->
@@ -168,390 +155,6 @@
 
 
             <TabControl Grid.Column="0" Background="Transparent" BorderThickness="0">
-                <TabItem Header="Simple View">
-                    <Grid Margin="0">
-                        <DockPanel>
-<Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="10">
-                    <ListBox x:Name="CategoriesList"
-                             ItemsSource="{Binding Categories}"
-                             SelectedItem="{Binding ActiveCategory}"
-                             Background="Transparent"
-                             BorderThickness="0"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <!-- Grid layout: fill top-to-bottom, then left-to-right -->
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Vertical" ItemWidth="460"/>
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Focusable" Value="False"/>
-                                <Setter Property="IsTabStop" Value="False"/>
-                                <Setter Property="Padding" Value="0"/>
-                                <Setter Property="Margin" Value="0,0,12,12"/>
-                                <Setter Property="BorderThickness" Value="0"/>
-                                <Setter Property="Background" Value="Transparent"/>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border CornerRadius="16"
-                                        Padding="10"
-                                        Background="{Binding Order, Converter={StaticResource PastelByIndex}}">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
-                                            <Setter Property="BorderThickness" Value="1"/>
-                                            <Style.Triggers>
-                                                <!-- Highlight drop target when dragging -->
-                                                <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
-                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
-                                                    <Setter Property="BorderThickness" Value="3"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <StackPanel>
-                                        <DockPanel LastChildFill="True">
-<CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding Name}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-	                                            <UniformGrid DockPanel.Dock="Right" Columns="6" Width="186" Margin="16,0,0,0" HorizontalAlignment="Right">
-<Button Style="{StaticResource IconBtn}"
-                                                        ToolTip="Move category up"
-                                                        Command="{Binding DataContext.MoveCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/></Button>
-                                                <Button Style="{StaticResource IconBtn}"
-                                                        ToolTip="Move category down"
-                                                        Command="{Binding DataContext.MoveCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/></Button>
-                                                <Button Style="{StaticResource IconBtn}"
-                                                        ToolTip="Select all subcategories"
-                                                        Command="{Binding DataContext.SelectAllSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectAll}"/></Button>
-                                                <Button Style="{StaticResource IconBtn}" 
-                                                        ToolTip="Select none"
-                                                        Command="{Binding DataContext.SelectNoneSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/></Button>
-	                                                <ToggleButton Style="{StaticResource IconToggleBtn}"
-	                                                             ToolTip="Lock category (exclude from randomization)"
-	                                                             IsChecked="{Binding IsLocked}" Content="≡ƒöÆ"/>
-	                                                <Button Style="{StaticResource IconBtn}"
-	                                                        ToolTip="Randomize this category"
-	                                                        Command="{Binding DataContext.RandomizeCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-	                                                        CommandParameter="{Binding}" Content="≡ƒÄ▓"/>
-</UniformGrid>
-                                            
-                                        </DockPanel>
-
-                                        <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Margin="0,8,0,0">
-                                            <StackPanel Margin="0,8,0,0">
-                                                <!-- Affixes -->
-                                                <Grid Margin="0,0,0,10">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                                        <TextBlock Opacity="0.7" Text="Prefix" />
-                                                        <TextBox Background="{StaticResource InputCyan}"
-                                                                 Text="{Binding Prefix, UpdateSourceTrigger=PropertyChanged}" />
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="1">
-                                                        <TextBlock Opacity="0.7" Text="Suffix" />
-                                                        <TextBox Background="{StaticResource InputCyan}"
-                                                                 Text="{Binding Suffix, UpdateSourceTrigger=PropertyChanged}" />
-                                                    </StackPanel>
-                                                </Grid>
-
-                                                <TextBlock Opacity="0.7" Margin="0,0,0,6" Text="Subcategories (check to include; click name to edit; use ^ / V to reorder)" />
-                                                <ItemsControl ItemsSource="{Binding SubCategories}">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <DockPanel Margin="0,0,0,6">
-                                                                <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-	                                                                <UniformGrid DockPanel.Dock="Right" Columns="4" Width="124" Margin="16,0,0,0" HorizontalAlignment="Right">
-<Button Style="{StaticResource IconBtn}"
-                                                                            ToolTip="Move subcategory up"
-                                                                            Command="{Binding DataContext.MoveSubCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/></Button>
-                                                                    <Button Style="{StaticResource IconBtn}"
-                                                                            ToolTip="Move subcategory down"
-                                                                            Command="{Binding DataContext.MoveSubCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/></Button>
-	                                                                    <ToggleButton Style="{StaticResource IconToggleBtn}"
-	                                                                                 ToolTip="Lock subcategory (exclude from randomization)"
-	                                                                                 IsChecked="{Binding IsLocked}" Content="≡ƒöÆ"/>
-	                                                                    <Button Style="{StaticResource IconBtn}"
-	                                                                            ToolTip="Randomize this subcategory"
-	                                                                            Command="{Binding DataContext.RandomizeSubCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-	                                                                            CommandParameter="{Binding}" Content="≡ƒÄ▓"/>
-</UniformGrid>
-                                                                <Button
-                                                                        CommandParameter="{Binding}" Command="{Binding DataContext.SelectSubCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="{Binding Name}" Background="Transparent" BorderThickness="0" Padding="6,2" HorizontalAlignment="Left"/></DockPanel>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </StackPanel>
-                                        </Expander>
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Border>
-            </DockPanel>
-                    </Grid>
-                </TabItem>
-                <TabItem Header="Advanced View">
-                    <Grid Margin="0">
-                        <DockPanel>
-<Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="10">
-                    <TabControl ItemsSource="{Binding Categories}" SelectedItem="{Binding ActiveCategory}" BorderThickness="0" Background="Transparent">
-                        
-<TabControl.ItemContainerStyle>
-    <Style TargetType="TabItem">
-        <Setter Property="Margin" Value="0,0,6,0"/>
-        <Setter Property="Padding" Value="12,7"/>
-        <Setter Property="Background" Value="{Binding Order, Converter={StaticResource PastelByIndex}}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Opacity" Value="1"/>
-        <Style.Triggers>
-            <DataTrigger Binding="{Binding Enabled}" Value="False">
-                <Setter Property="Opacity" Value="0.55"/>
-            </DataTrigger>
-            <Trigger Property="IsSelected" Value="True">
-                <Setter Property="BorderBrush" Value="{StaticResource AccentPink}"/>
-                <Setter Property="BorderThickness" Value="2"/>
-            </Trigger>
-        </Style.Triggers>
-    </Style>
-</TabControl.ItemContainerStyle>
-                        <TabControl.ItemTemplate>
-                            <DataTemplate>
-                                <!-- Category ordering controls live in the tab header itself (left/right). -->
-                                <DockPanel LastChildFill="True" VerticalAlignment="Center">
-                                    <Button Style="{StaticResource IconBtn}"
-                                            Width="22" Height="22" Margin="0,0,6,0"
-                                            ToolTip="Move category left"
-                                            Command="{Binding DataContext.MoveCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            CommandParameter="{Binding}">
-                                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronLeft}"/>
-                                    </Button>
-                                    <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                    <Button Style="{StaticResource IconBtn}"
-                                            DockPanel.Dock="Right"
-                                            Width="22" Height="22" Margin="6,0,0,0"
-                                            ToolTip="Move category right"
-                                            Command="{Binding DataContext.MoveCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            CommandParameter="{Binding}">
-                                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronRight}"/>
-                                    </Button>
-                                </DockPanel>
-                            </DataTemplate>
-                        </TabControl.ItemTemplate>
-
-                        <TabControl.ContentTemplate>
-                            <DataTemplate>
-                                
-<!-- Make Advanced View reliably scrollable (header + affixes + long lists) -->
-<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <Grid Margin="2">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <!-- Category header removed: checkbox moved into tab header (1.8.2.0) -->
-<!-- Category affixes -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                <TextBlock Opacity="0.7" Text="Category Prefix"/>
-                <TextBox Background="{StaticResource InputCyan}" Text="{Binding Prefix, UpdateSourceTrigger=PropertyChanged}"/>
-            </StackPanel>
-            <StackPanel Grid.Column="1">
-                <TextBlock Opacity="0.7" Text="Category Suffix"/>
-                <TextBox Background="{StaticResource InputCyan}" Text="{Binding Suffix, UpdateSourceTrigger=PropertyChanged}"/>
-            </StackPanel>
-        </Grid>
-
-        <!-- Nested tabs: Subcategories -->
-        <Grid Grid.Row="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                <TextBlock Opacity="0.7" Text="Subcategories" VerticalAlignment="Center"/>
-																					<UniformGrid DockPanel.Dock="Right" Columns="4" Width="124" Margin="16,0,0,0" HorizontalAlignment="Right">
-                    <Button Style="{StaticResource IconBtn}"
-                            ToolTip="Move selected subcategory up"
-                            Command="{Binding DataContext.MoveSubCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                            CommandParameter="{Binding DataContext.SelectedSubCategory, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/>
-                    </Button>
-                    <Button Style="{StaticResource IconBtn}"
-                            ToolTip="Move selected subcategory down"
-                            Command="{Binding DataContext.MoveSubCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                            CommandParameter="{Binding DataContext.SelectedSubCategory, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/>
-                    </Button>
-                </UniformGrid>
-            </DockPanel>
-
-            <TabControl Grid.Row="1"
-                        ItemsSource="{Binding SubCategories}"
-                        SelectedItem="{Binding DataContext.SelectedSubCategory, RelativeSource={RelativeSource AncestorType=Window}}"
-                        Background="Transparent"
-                        BorderThickness="0">
-
-                <TabControl.ItemContainerStyle>
-                    <Style TargetType="TabItem">
-                        <Setter Property="Margin" Value="0,0,6,0"/>
-                        <Setter Property="Padding" Value="10,6"/>
-                        <!-- Subcategory tabs inherit the selected category color -->
-                        <Setter Property="Background"
-                                Value="{Binding DataContext.Order, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource PastelByIndex}}"/>
-                        <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
-                        <Setter Property="BorderThickness" Value="1"/>
-                        <Setter Property="Opacity" Value="1"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding Enabled}" Value="False">
-                                <Setter Property="Opacity" Value="0.55"/>
-                            </DataTrigger>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
-                                <Setter Property="BorderThickness" Value="2"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </TabControl.ItemContainerStyle>
-
-                <TabControl.ItemTemplate>
-                    <DataTemplate>
-                        <DockPanel LastChildFill="True">
-                            <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" VerticalAlignment="Center"/>
-                        </DockPanel>
-                    </DataTemplate>
-                </TabControl.ItemTemplate>
-
-                <TabControl.ContentTemplate>
-                    <DataTemplate>
-                        <Border CornerRadius="14" Padding="10" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Margin="0,10,0,0">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                        <TextBlock Opacity="0.7" Text="Subcategory Prefix"/>
-                                        <TextBox Background="{StaticResource InputCyan}" Text="{Binding Prefix, UpdateSourceTrigger=PropertyChanged}"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1">
-                                        <TextBlock Opacity="0.7" Text="Subcategory Suffix"/>
-                                        <TextBox Background="{StaticResource InputCyan}" Text="{Binding Suffix, UpdateSourceTrigger=PropertyChanged}"/>
-                                    </StackPanel>
-                                </Grid>
-
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="14"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="14"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- Files inside this subcategory -->
-                                    <StackPanel Grid.Column="0">
-                                        <CheckBox Margin="0,0,0,6"
-                                                  IsChecked="{Binding UseAllTxtFiles}"
-                                                  >
-                                                  <TextBlock Text="Use all enabled files (unchecked = use only selected file)" TextWrapping="Wrap"/>
-                                        </CheckBox>
-                                        <DockPanel Margin="0,0,0,6">
-    <TextBlock Opacity="0.7" Text="Files (.txt)" VerticalAlignment="Center"/>
-    <UniformGrid DockPanel.Dock="Right" Columns="2" Width="62" Margin="16,0,0,0" HorizontalAlignment="Right">
-        <Button Style="{StaticResource IconBtn}"
-                ToolTip="Select all files"
-                Command="{Binding DataContext.SelectAllEntriesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                CommandParameter="{Binding}">
-            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectAll}"/>
-        </Button>
-        <Button Style="{StaticResource IconBtn}"
-                ToolTip="Select none"
-                Command="{Binding DataContext.SelectNoneEntriesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                CommandParameter="{Binding}">
-            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/>
-        </Button>
-    </UniformGrid>
-</DockPanel>
-                                        <ListBox ItemsSource="{Binding Entries}" Height="140" Background="Transparent" BorderThickness="0"
-                                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <DockPanel Margin="0,0,0,4">
-                                                        <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                                        <Button
-                                                                CommandParameter="{Binding}" Command="{Binding DataContext.SelectEntryCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="{Binding Name}" Background="Transparent" BorderThickness="0" Padding="6,2" HorizontalAlignment="Left"/><UniformGrid DockPanel.Dock="Right" Columns="2" Width="62" Margin="10,0,0,0" HorizontalAlignment="Right">
-                                                            <Button Style="{StaticResource IconBtn}" ToolTip="Move file up"
-                                                                    Command="{Binding DataContext.MoveEntryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                    CommandParameter="{Binding}">
-                                                                <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/>
-                                                            </Button>
-                                                            <Button Style="{StaticResource IconBtn}" ToolTip="Move file down"
-                                                                    Command="{Binding DataContext.MoveEntryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                    CommandParameter="{Binding}">
-                                                                <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/>
-                                                            </Button>
-                                                        </UniformGrid>
-                                                    </DockPanel>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
-                                    </StackPanel>
-
-                                    <!-- Preview entries -->
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Opacity="0.7" Text="{Binding EntrySummary}" Margin="0,0,0,6"/>
-                                        <ListBox ItemsSource="{Binding PreviewEntries}" Height="140" ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-                                    </StackPanel>
-
-                                    <!-- Current chosen entry -->
-                                    <StackPanel Grid.Column="4">
-                                        <TextBlock Opacity="0.7" Text="Current entry in prompt" Margin="0,0,0,6"/>
-                                        <TextBox Background="#FFF7FBFF" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" Height="140"
-                                                 Text="{Binding CurrentEntry}"/>
-                                    </StackPanel>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </TabControl.ContentTemplate>
-
-            </TabControl>
-
-
-            </Grid>
-    </Grid>
-</ScrollViewer>
-                            </DataTemplate>
-                        </TabControl.ContentTemplate>
-                    </TabControl>
-                </Border>
-            </DockPanel>
-                    </Grid>
-                </TabItem>
                 <TabItem Header="Search" DataContext="{Binding SearchViewModel}">
                     <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="12">
                         <Grid>
@@ -838,270 +441,268 @@
 	
 	            <GridSplitter Grid.Row="1" Height="10" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent"/>
 	
-	            <!-- Tabs (stacked top) -->
-	            <TabControl Grid.Row="0" Background="Transparent" BorderThickness="0">
-	                <TabItem Header="Simple View">
-	                    <Grid Margin="0">
-	                        <DockPanel>
-	                            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-	                                <TextBlock FontSize="26" FontWeight="SemiBold" Text="Simple View" Foreground="{StaticResource AccentPink}"/>
-	                                <TextBlock Opacity="0.75" FontSize="13" Text="(Categories View)"/>
-	                                <TextBlock Margin="0,2,0,0" Opacity="0.75" Text="Check categories and subcategories to include. Use the arrow buttons to reorder."/>
-	                            </StackPanel>
-	
-	                            <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="10">
-	                                <ListBox ItemsSource="{Binding Categories}" SelectedItem="{Binding ActiveCategory}" Background="Transparent" BorderThickness="0"
-                                                     ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-	                                    <ListBox.ItemsPanel>
-	                                        <ItemsPanelTemplate>
-	                                            <WrapPanel Orientation="Vertical" ItemWidth="460"/>
-	                                        </ItemsPanelTemplate>
-	                                    </ListBox.ItemsPanel>
-	                                    <ListBox.ItemContainerStyle>
-	                                        <Style TargetType="ListBoxItem">
-	                                            <Setter Property="Focusable" Value="False"/>
-	                                            <Setter Property="IsTabStop" Value="False"/>
-	                                            <Setter Property="Padding" Value="0"/>
-	                                            <Setter Property="Margin" Value="0,0,12,12"/>
-	                                            <Setter Property="BorderThickness" Value="0"/>
-	                                            <Setter Property="Background" Value="Transparent"/>
-	                                        </Style>
-	                                    </ListBox.ItemContainerStyle>
-	
-	                                    <ListBox.ItemTemplate>
-	                                        <DataTemplate>
-	                                            <Border CornerRadius="16" Padding="10" Background="{Binding Order, Converter={StaticResource PastelByIndex}}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1">
-	                                                <StackPanel>
-	                                                    <DockPanel>
-	                                                        <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-	                                                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding Name}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-														<UniformGrid DockPanel.Dock="Right" Columns="6" Width="186" Margin="16,0,0,0" HorizontalAlignment="Right">
-<Button Style="{StaticResource IconBtn}" ToolTip="Move category up"
-	                                                                    Command="{Binding DataContext.MoveCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/></Button>
-	                                                            <Button Style="{StaticResource IconBtn}" ToolTip="Move category down"
-	                                                                    Command="{Binding DataContext.MoveCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/></Button>
-	                                                            <Button Style="{StaticResource IconBtn}" ToolTip="Select all subcategories"
-	                                                                    Command="{Binding DataContext.SelectAllSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectAll}"/></Button>
-														<Button Style="{StaticResource IconBtn}"  ToolTip="Select no subcategories"
-														        Command="{Binding DataContext.SelectNoneSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/></Button>
-														<ToggleButton Style="{StaticResource IconToggleBtn}" ToolTip="Lock category (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="≡ƒöÆ"/>
-														<Button Style="{StaticResource IconBtn}" ToolTip="Randomize this category" Command="{Binding DataContext.RandomizeCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="≡ƒÄ▓"/>
-	</UniformGrid>
-	                                                    </DockPanel>
-	                                                    <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Margin="0,8,0,0">
-	                                                        <StackPanel Margin="0,8,0,0">
-	                                                            <TextBlock Opacity="0.7" Margin="0,0,0,6" Text="Subcategories"/>
-	                                                            <ItemsControl ItemsSource="{Binding SubCategories}">
-	                                                                <ItemsControl.ItemTemplate>
-	                                                                    <DataTemplate>
-	                                                                        <DockPanel Margin="0,0,0,6">
-	                                                                            <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-																<UniformGrid DockPanel.Dock="Right" Columns="4" Width="124" Margin="16,0,0,0" HorizontalAlignment="Right">
-<Button Style="{StaticResource IconBtn}" ToolTip="Move subcategory up"
-	                                                                                        Command="{Binding DataContext.MoveSubCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/></Button>
-																						<Button Style="{StaticResource IconBtn}"  ToolTip="Move subcategory down"
-																						        Command="{Binding DataContext.MoveSubCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"><Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/></Button>
-																						<ToggleButton Style="{StaticResource IconToggleBtn}" ToolTip="Lock subcategory (exclude from randomization)" IsChecked="{Binding IsLocked}" Content="≡ƒöÆ"/>
-																						<Button Style="{StaticResource IconBtn}" ToolTip="Randomize this subcategory" Command="{Binding DataContext.RandomizeSubCategoryOnceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="≡ƒÄ▓"/>
-</UniformGrid>
-	                                                                            <Button CommandParameter="{Binding}" Command="{Binding DataContext.SelectSubCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="{Binding Name}" Background="Transparent" BorderThickness="0" Padding="6,2" HorizontalAlignment="Left"/></DockPanel>
-	                                                                    </DataTemplate>
-	                                                                </ItemsControl.ItemTemplate>
-	                                                            </ItemsControl>
-	                                                        </StackPanel>
-	                                                    </Expander>
-	                                                </StackPanel>
-	                                            </Border>
-	                                        </DataTemplate>
-	                                    </ListBox.ItemTemplate>
-	                                </ListBox>
-	                            </Border>
-	                        </DockPanel>
-	                    </Grid>
-	                </TabItem>
-	                <TabItem Header="Advanced View">
-	                    <!-- In portrait, Advanced View stays available; it uses the same VM bindings -->
-	                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-	                        <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="10">
-	                            <TabControl ItemsSource="{Binding Categories}" SelectedItem="{Binding ActiveCategory}" BorderThickness="0" Background="Transparent">
-	                                
-<TabControl.ItemContainerStyle>
-    <Style TargetType="TabItem">
-        <Setter Property="Margin" Value="0,0,6,0"/>
-        <Setter Property="Padding" Value="12,7"/>
-        <Setter Property="Background" Value="{Binding Order, Converter={StaticResource PastelByIndex}}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Opacity" Value="1"/>
-        <Style.Triggers>
-            <DataTrigger Binding="{Binding Enabled}" Value="False">
-                <Setter Property="Opacity" Value="0.55"/>
-            </DataTrigger>
-            <Trigger Property="IsSelected" Value="True">
-                <Setter Property="BorderBrush" Value="{StaticResource AccentPink}"/>
-                <Setter Property="BorderThickness" Value="2"/>
-            </Trigger>
-        </Style.Triggers>
-    </Style>
-</TabControl.ItemContainerStyle>
-	                                <TabControl.ItemTemplate>
-	                                    <DataTemplate>
-	                                        <!-- Category ordering controls live in the tab header itself (left/right). -->
-	                                        <DockPanel LastChildFill="True" VerticalAlignment="Center">
-	                                            <Button Style="{StaticResource IconBtn}"
-	                                                    Width="22" Height="22" Margin="0,0,6,0"
-	                                                    ToolTip="Move category left"
-	                                                    Command="{Binding DataContext.MoveCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-	                                                    CommandParameter="{Binding}">
-	                                                <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronLeft}"/>
-	                                            </Button>
-	                                            <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-	                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-	                                            <Button Style="{StaticResource IconBtn}"
-	                                                    DockPanel.Dock="Right"
-	                                                    Width="22" Height="22" Margin="6,0,0,0"
-	                                                    ToolTip="Move category right"
-	                                                    Command="{Binding DataContext.MoveCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-	                                                    CommandParameter="{Binding}">
-	                                                <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronRight}"/>
-	                                            </Button>
-	                                        </DockPanel>
-	                                    </DataTemplate>
-	                                </TabControl.ItemTemplate>
-	                                <TabControl.ContentTemplate>
-	                                    <DataTemplate>
-	                                        <StackPanel>
-	                                            <UniformGrid HorizontalAlignment="Right" Columns="2" Width="62" Margin="0,0,0,8">
-	                                                <Button Style="{StaticResource IconBtn}" ToolTip="Select all subcategories"
-	                                                        Command="{Binding DataContext.SelectAllSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
-	                                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectAll}"/>
-	                                                </Button>
-	                                                <Button Style="{StaticResource IconBtn}" ToolTip="Select none"
-	                                                        Command="{Binding DataContext.SelectNoneSubCategoriesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
-	                                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/>
-	                                                </Button>
-	                                            </UniformGrid>
-	                                            
-<TextBlock Opacity="0.7" Text="Subcategories" Margin="0,0,0,6"/>
+            <!-- Tabs (stacked top) -->
+            <TabControl Grid.Row="0" Background="Transparent" BorderThickness="0">
+                <TabItem Header="Search" DataContext="{Binding SearchViewModel}">
+                    <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="12">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-<TabControl ItemsSource="{Binding SubCategories}"
-            SelectedItem="{Binding DataContext.SelectedSubCategory, RelativeSource={RelativeSource AncestorType=Window}}"
-            Background="Transparent" BorderThickness="0">
-    <TabControl.ItemContainerStyle>
-        <Style TargetType="TabItem">
-            <Setter Property="Margin" Value="0,0,6,0"/>
-            <Setter Property="Padding" Value="10,6"/>
-            <Setter Property="Background"
-                    Value="{Binding DataContext.Order, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource PastelByIndex}}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Opacity" Value="1"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding Enabled}" Value="False">
-                    <Setter Property="Opacity" Value="0.55"/>
-                </DataTrigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
-                    <Setter Property="BorderThickness" Value="2"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-    </TabControl.ItemContainerStyle>
+                            <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                                <DockPanel LastChildFill="True">
+                                    <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                             Background="{StaticResource InputCyan}"
+                                             MinWidth="220"
+                                             Margin="0,0,8,0"/>
+                                    <Button Content="Add Tag" Margin="0,0,8,0" Command="{Binding AddTagCommand}"/>
+                                </DockPanel>
+                                <ItemsControl ItemsSource="{Binding SuggestedTags}" Margin="0,8,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding DisplayText}"
+                                                    Padding="8,4"
+                                                    Margin="0,0,6,6"
+                                                    Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding Name}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
 
-    <TabControl.ItemTemplate>
-        <DataTemplate>
-            <DockPanel>
-                <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBlock FontWeight="SemiBold" Text="{Binding Name}" VerticalAlignment="Center"/>
-            </DockPanel>
-        </DataTemplate>
-    </TabControl.ItemTemplate>
+                            <StackPanel Grid.Row="1" Margin="0,0,0,10">
+                                <TextBlock Text="Selected tags" Opacity="0.7" Margin="0,0,0,6"/>
+                                <ItemsControl ItemsSource="{Binding SelectedTags}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{StaticResource InputCyan}" CornerRadius="10" Padding="6,3" Margin="0,0,6,6">
+                                                <DockPanel>
+                                                    <TextBlock Text="{Binding DisplayText}" Margin="0,0,6,0"/>
+                                                    <Button Content="x"
+                                                            Padding="0"
+                                                            Width="18"
+                                                            Height="18"
+                                                            Command="{Binding DataContext.RemoveTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding Name}"/>
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
 
-    <TabControl.ContentTemplate>
-        <DataTemplate>
-            <StackPanel Margin="0,10,0,0">
-                <UniformGrid Columns="2" HorizontalAlignment="Right" Width="62" Margin="0,0,0,8">
-                    <Button Style="{StaticResource IconBtn}" ToolTip="Move subcategory up"
-                            Command="{Binding DataContext.MoveSubCategoryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
-                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/>
-                    </Button>
-                    <Button Style="{StaticResource IconBtn}" ToolTip="Move subcategory down"
-                            Command="{Binding DataContext.MoveSubCategoryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
-                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/>
-                    </Button>
-                </UniformGrid>
+                            <StackPanel Grid.Row="2" Margin="0,0,0,10">
+                                <TextBlock Text="Related tags" Opacity="0.7" Margin="0,0,0,6"/>
+                                <Border Background="{StaticResource PanelBg}"
+                                        BorderBrush="{StaticResource BorderSoft}"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="8">
+                                    <Grid>
+                                        <ItemsControl ItemsSource="{Binding RelatedTags}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Content="{Binding DisplayText}"
+                                                            Padding="8,4"
+                                                            Margin="0,0,6,6"
+                                                            Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding Name}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Text="Related tags will appear here." Opacity="0.6">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding RelatedTags.Count}" Value="0">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
 
-                <Grid Margin="0,0,0,10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Opacity="0.7" Text="Subcategory Prefix"/>
-                        <TextBox Background="{StaticResource InputCyan}" Text="{Binding Prefix, UpdateSourceTrigger=PropertyChanged}"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1">
-                        <TextBlock Opacity="0.7" Text="Subcategory Suffix"/>
-                        <TextBox Background="{StaticResource InputCyan}" Text="{Binding Suffix, UpdateSourceTrigger=PropertyChanged}"/>
-                    </StackPanel>
-                </Grid>
+                            <Border Grid.Row="3" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="10" Padding="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="16"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
 
-                <CheckBox Margin="0,0,0,6"
-                          IsChecked="{Binding UseAllTxtFiles}"
-                          >
-                                                  <TextBlock Text="Use all enabled files (unchecked = use only selected file)" TextWrapping="Wrap"/>
-                                        </CheckBox>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Found files" Opacity="0.7" Margin="0,0,0,6"/>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding Results}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Padding="10,4"
+                                                                Margin="0,0,6,6"
+                                                                Background="{StaticResource InputCyan}"
+                                                                ToolTip="{Binding Path}"
+                                                                Command="{Binding DataContext.SelectFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding}">
+                                                            <Button.Content>
+                                                                <TextBlock TextWrapping="Wrap" Width="240">
+                                                                    <Run Text="{Binding Path, Converter={StaticResource CategoryPathConverter}}"/>
+                                                                    <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
+                                                                </TextBlock>
+                                                            </Button.Content>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </StackPanel>
 
-                <DockPanel Margin="0,0,0,6">
-    <TextBlock Opacity="0.7" Text="Files (.txt)" VerticalAlignment="Center"/>
-    <UniformGrid DockPanel.Dock="Right" Columns="2" Width="62" Margin="16,0,0,0" HorizontalAlignment="Right">
-        <Button Style="{StaticResource IconBtn}"
-                ToolTip="Select all files"
-                Command="{Binding DataContext.SelectAllEntriesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                CommandParameter="{Binding}">
-            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectAll}"/>
-        </Button>
-        <Button Style="{StaticResource IconBtn}"
-                ToolTip="Select none"
-                Command="{Binding DataContext.SelectNoneEntriesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                CommandParameter="{Binding}">
-            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoSelectNone}"/>
-        </Button>
-    </UniformGrid>
-</DockPanel>
-                <ListBox ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <DockPanel Margin="0,0,0,6">
-                                <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <Button
-                                        CommandParameter="{Binding}" Command="{Binding DataContext.SelectEntryCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="{Binding Name}" Background="Transparent" BorderThickness="0" Padding="6,2" HorizontalAlignment="Left"/><UniformGrid DockPanel.Dock="Right" Columns="2" Width="62" Margin="16,0,0,0" HorizontalAlignment="Right">
-                                    <Button Style="{StaticResource IconBtn}" ToolTip="Move file up"
-                                            Command="{Binding DataContext.MoveEntryUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
-                                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronUp}"/>
-                                    </Button>
-                                    <Button Style="{StaticResource IconBtn}" ToolTip="Move file down"
-                                            Command="{Binding DataContext.MoveEntryDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
-                                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoChevronDown}"/>
-                                    </Button>
-                                </UniformGrid>
-                            </DockPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </StackPanel>
-        </DataTemplate>
-    </TabControl.ContentTemplate>
-</TabControl>
-	                                        </StackPanel>
-	                                    </DataTemplate>
-	                                </TabControl.ContentTemplate>
-	                            </TabControl>
-	                        </Border>
-	                    </ScrollViewer>
-	                </TabItem>
-	            </TabControl>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Selected files" Opacity="0.7" Margin="0,0,0,6"/>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding SelectedFiles}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                            <Button Padding="10,4"
+                                                                    Margin="0,0,8,0"
+                                                                    Background="{StaticResource InputCyan}"
+                                                                    ToolTip="{Binding Path}"
+                                                                    Command="{Binding DataContext.RemoveSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}">
+                                                                <Button.Content>
+                                                                    <TextBlock TextWrapping="Wrap" Width="240">
+                                                                        <Run Text="{Binding Path, Converter={StaticResource CategoryPathConverter}}"/>
+                                                                        <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
+                                                                    </TextBlock>
+                                                                </Button.Content>
+                                                            </Button>
+                                                            <Button Content="^"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Margin="0,0,4,0"
+                                                                    Command="{Binding DataContext.MoveSelectedFileUpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="v"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Margin="0,0,4,0"
+                                                                    Command="{Binding DataContext.MoveSelectedFileDownCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="x"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Command="{Binding DataContext.RemoveSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Row="4" Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="No files found in Categories." Opacity="0.7">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.EmptyIndex}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="No files match the selected tags." Opacity="0.7">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.NoResults}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource AccentPink}" TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Error}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource IconBtn}"
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Center"
+                                        ToolTip="Refresh tags"
+                                        Command="{Binding RefreshCommand}">
+                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoRefresh}"/>
+                                </Button>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </TabItem>
+            </TabControl>
 
 	            <!-- Prompt (stacked bottom) -->
             <controls:PromptPanel Grid.Row="2"/>

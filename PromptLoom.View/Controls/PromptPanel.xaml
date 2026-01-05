@@ -1,8 +1,8 @@
 <!--
 CHANGE LOG
-- 2026-03-02 | Request: Batch/seed alignment | Show qty inline and align seed rows.
+- 2026-03-05 | Request: Remove view-only editor | Drop file editor tab after view decoupling.
 - 2026-03-02 | Request: Prompt control layout tweaks | Center headers, inline seeds, and simplify actions.
-- 2026-03-02 | Fix: Prompt panel resources | Scope converters and Swarm card template locally for the shared panel.
+- 2026-03-02 | Request: Batch/seed alignment | Show qty inline and align seed rows.
 -->
 <UserControl x:Class="PromptLoom.Controls.PromptPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -497,22 +497,6 @@ CHANGE LOG
                     <TabItem Header="System">
                         <Border Padding="8" Background="Transparent">
                             <ListBox ItemsSource="{Binding ErrorEntries}" />
-                        </Border>
-                    </TabItem>
-                    <TabItem Header="File Editor">
-                        <Border Padding="8" Background="Transparent">
-                            <DockPanel>
-                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                                    <Button Content="Save" Width="90" Margin="0,0,8,0" Command="{Binding SaveEntryFileCommand}"/>
-                                    <Button Content="Open" Width="90" Margin="0,0,8,0" Command="{Binding OpenEntryFileCommand}"/>
-                                    <TextBlock Opacity="0.75" VerticalAlignment="Center" Text="{Binding EntryEditorPath}" TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
-                                <TextBox Text="{Binding EntryEditorText, UpdateSourceTrigger=PropertyChanged}"
-                                         TextWrapping="Wrap" AcceptsReturn="True"
-                                         VerticalScrollBarVisibility="Auto"
-                                         Background="{StaticResource InputCyan}"
-                                         FontSize="13"/>
-                            </DockPanel>
                         </Border>
                     </TabItem>
                 </TabControl>

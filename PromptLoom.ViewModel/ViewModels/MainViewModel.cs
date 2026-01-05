@@ -1,8 +1,7 @@
 // CHANGE LOG
+// - 2026-03-05 | Request: Tag selection provider | Use selected files to drive prompt generation.
+// - 2026-03-05 | Request: Remove view-only bindings | Drop selection/preview and file editor wiring.
 // - 2026-03-02 | Request: Batch qty slider | Clamp batch quantity to 2-50.
-// - 2026-03-02 | Fix: Restore AutoSave helper | Reintroduce AutoSave to funnel into the debounced queue.
-// - 2026-01-02 | Request: Tag search wiring | Add SearchViewModel initialization in MainViewModel.
-// - 2025-12-31 | Request: SwarmUI cards + toggles | Add model/LoRA cards, seed toggle, and persistence fixes.
 // FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
 // CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
 // CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
@@ -63,6 +62,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly string _installDir;
     private readonly SchemaService _schema;
     private readonly PromptEngine _engine;
+    private readonly PromptGenerationService _promptGeneration;
     private readonly IWildcardFileReader _fileReader;
     private readonly IClock _clock;
     private readonly IRandomSource _randomSource;
@@ -294,171 +294,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private DispatcherTimer? _copyResetTimer;
 
-    // WPF SelectedItem bindings on both the left ListBox and the center TabControl are TwoWay by default.
-    // If we try to keep SelectedCategory and ActiveCategory in sync naively, WPF can re-enter setters
-    // and trigger an uncatchable StackOverflowException (the process just exits).
-    private bool _syncingCategorySelection;
-    private bool _syncingSubCategorySelection;
-
-    // Prevent re-entrant preview refresh loops.
-    // Updating EntrySummary during RefreshSubCategoryPreview raises PropertyChanged,
-    // which can otherwise cause OnSubCategoryPropertyChanged -> RefreshSelectedPreview ->
-    // RefreshSubCategoryPreview... and eventually a StackOverflow (hard process exit).
-    private bool _refreshingPreview;
-
-    /// <summary>
-    /// Category currently being edited in the center panel (tabs).
-    /// </summary>
-    private CategoryModel? _activeCategory;
-    public CategoryModel? ActiveCategory
-    {
-        get => _activeCategory;
-        set
-        {
-            if (ReferenceEquals(_activeCategory, value)) return;
-            _activeCategory = value;
-            OnPropertyChanged();
-
-            // Keep left selection in sync with the editor.
-            if (!_syncingCategorySelection)
-            {
-                try
-                {
-                    _syncingCategorySelection = true;
-                    if (_activeCategory is not null && !ReferenceEquals(SelectedCategory, _activeCategory))
-                        SelectedCategory = _activeCategory;
-                }
-                finally
-                {
-                    _syncingCategorySelection = false;
-                }
-            }
-
-            // When switching tabs, move editing focus to that category's selected (or first) subcategory.
-            if (_activeCategory is not null)
-            {
-                var newSub = _activeCategory.SelectedSubCategory ?? _activeCategory.SubCategories.FirstOrDefault();
-                if (!ReferenceEquals(SelectedSubCategory, newSub))
-                    SelectedSubCategory = newSub;
-            }
-        }
-    }
-
-    private CategoryModel? _selectedCategory;
-    public CategoryModel? SelectedCategory
-    {
-        get => _selectedCategory;
-        set
-        {
-            if (ReferenceEquals(_selectedCategory, value)) return;
-            _selectedCategory = value;
-            OnPropertyChanged();
-
-            // If the user clicked a category on the left panel, switch the editor tab too.
-            if (!_syncingCategorySelection)
-            {
-                try
-                {
-                    _syncingCategorySelection = true;
-                    if (_selectedCategory is not null && !ReferenceEquals(ActiveCategory, _selectedCategory))
-                        ActiveCategory = _selectedCategory;
-                }
-                finally
-                {
-                    _syncingCategorySelection = false;
-                }
-            }
-
-            // When changing selected category, update the selected subcategory to that category's selected or first
-            if (_selectedCategory is not null)
-            {
-                var newSub = _selectedCategory.SelectedSubCategory ?? _selectedCategory.SubCategories.FirstOrDefault();
-                if (!ReferenceEquals(SelectedSubCategory, newSub))
-                    SelectedSubCategory = newSub;
-            }
-        }
-    }
-
-    private SubCategoryModel? _selectedSubCategory;
-    public SubCategoryModel? SelectedSubCategory
-    {
-        get => _selectedSubCategory;
-        set
-        {
-            if (ReferenceEquals(_selectedSubCategory, value)) return;
-            _selectedSubCategory = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(SelectedSubCategoryDisplayName));
-
-            // When a subcategory is selected for editing, also mark it as the selected subcategory for its parent category.
-            if (value is not null && !_syncingSubCategorySelection)
-            {
-                try
-                {
-                    _syncingSubCategorySelection = true;
-                    var parent = Categories.FirstOrDefault(c => c.SubCategories.Contains(value));
-                    if (parent is not null && !ReferenceEquals(parent.SelectedSubCategory, value))
-                        parent.SelectedSubCategory = value;
-                }
-                finally
-                {
-                    _syncingSubCategorySelection = false;
-                }
-            }
-
-            RefreshSelectedPreview();
-
-            // Keep file selection in sync: when subcategory changes, default to its selected/first file.
-            if (SelectedSubCategory is not null)
-                SelectedEntry = SelectedSubCategory.SelectedEntry ?? SelectedSubCategory.Entries.FirstOrDefault();
-
-            QueueRecomputePrompt();
-        }
-    }
-
-    public string SelectedSubCategoryDisplayName
-        => SelectedSubCategory is null ? "(no subcategory selected)" : $"{FindParentCategoryName(SelectedSubCategory)}/{SelectedSubCategory.Name}";
-
-    
-    private PromptEntryModel? _selectedEntry;
-    public PromptEntryModel? SelectedEntry
-    {
-        get => _selectedEntry;
-        set
-        {
-            if (ReferenceEquals(_selectedEntry, value)) return;
-            _selectedEntry = value;
-
-            // Keep the selected file stored on the owning SubCategoryModel so prompt generation
-            // (PromptEngine) and persistence (_subcategory.json) use the same selection.
-            // This fixes a 1.7.0 regression where the UI selection only updated MainViewModel.SelectedEntry.
-            if (SelectedSubCategory is not null && value is not null && SelectedSubCategory.Entries.Contains(value))
-                SelectedSubCategory.SelectedEntry = value;
-
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(SelectedEntryDisplayName));
-            LoadSelectedEntryFile();
-        }
-    }
-
-    public string SelectedEntryDisplayName
-        => SelectedEntry is null ? "(no file selected)" : $"{FindParentCategoryName(SelectedSubCategory ?? new SubCategoryModel("?", "?"))}/{SelectedSubCategory?.Name}/{SelectedEntry.Name}";
-
-    private string _entryEditorText = "";
-    public string EntryEditorText
-    {
-        get => _entryEditorText;
-        set { _entryEditorText = value; OnPropertyChanged(); }
-    }
-
-    private string _entryEditorPath = "";
-    public string EntryEditorPath
-    {
-        get => _entryEditorPath;
-        private set { _entryEditorPath = value; OnPropertyChanged(); }
-    }
-
-private string _promptText = "";
+    private string _promptText = "";
     public string PromptText { get => _promptText; set { _promptText = value; OnPropertyChanged(); } }
 
     private string _promptSeedText = "";
@@ -492,11 +328,6 @@ private string _promptText = "";
     private string _systemMessages = "";
     public string SystemMessages { get => _systemMessages; set { _systemMessages = value; OnPropertyChanged(); } }
 
-    // Legacy: kept for compatibility with earlier builds. The 1.5.1 UI shows previews per-subcategory.
-    public ObservableCollection<string> SelectedSubCategoryPreview { get; } = new();
-    private string _selectedSubCategoryEntrySummary = "";
-    public string SelectedSubCategoryEntrySummary { get => _selectedSubCategoryEntrySummary; set { _selectedSubCategoryEntrySummary = value; OnPropertyChanged(); } }
-
     public RelayCommand ReloadCommand { get; }
     public RelayCommand SaveCommand { get; }
     public RelayCommand CopyCommand { get; }
@@ -515,23 +346,6 @@ private string _promptText = "";
     public RelayCommand SaveOutputCommand { get; }
     public RelayCommand OpenFolderCommand { get; }
     public RelayCommand RestoreOriginalCategoriesCommand { get; }
-    public RelayCommand SelectSubCategoryCommand { get; }
-    public RelayCommand SelectEntryCommand { get; }
-    public RelayCommand SelectAllSubCategoriesCommand { get; }
-    public RelayCommand SelectNoneSubCategoriesCommand { get; }
-    public RelayCommand SelectAllEntriesCommand { get; }
-    public RelayCommand SelectNoneEntriesCommand { get; }
-    public RelayCommand MoveCategoryUpCommand { get; }
-    public RelayCommand MoveCategoryDownCommand { get; }
-    public RelayCommand MoveSubCategoryUpCommand { get; }
-    public RelayCommand MoveSubCategoryDownCommand { get; }
-    public RelayCommand MoveEntryUpCommand { get; }
-    public RelayCommand MoveEntryDownCommand { get; }
-    public RelayCommand SaveEntryFileCommand { get; }
-    public RelayCommand OpenEntryFileCommand { get; }
-
-    public RelayCommand RandomizeCategoryOnceCommand { get; }
-    public RelayCommand RandomizeSubCategoryOnceCommand { get; }
 
     /// <summary>
     /// Window-driven initialization entrypoint.
@@ -599,6 +413,9 @@ private string _promptText = "";
         _errors.Info("SchemaService created. CategoriesDir=" + _schema.CategoriesDir);
 
         SearchViewModel = searchViewModel ?? BuildSearchViewModel();
+        _promptGeneration = new PromptGenerationService(
+            _engine,
+            new SelectedFilesSelectionProvider(Categories, SearchViewModel.SelectedFiles));
 
         ReloadCommand = new RelayCommand("Reload", _ => Reload(), errorReporter: _errors);
         SaveCommand = new RelayCommand("Save", _ => Save(), errorReporter: _errors);
@@ -618,25 +435,6 @@ private string _promptText = "";
         SaveOutputCommand = new RelayCommand("SaveOutput", _ => SaveOutput(), errorReporter: _errors);
         OpenFolderCommand = new RelayCommand("OpenFolder", _ => OpenFolder(), errorReporter: _errors);
         RestoreOriginalCategoriesCommand = new RelayCommand("RestoreOriginalCategories", _ => RestoreOriginalCategories(), errorReporter: _errors);
-        SelectSubCategoryCommand = new RelayCommand("SelectSubCategory", p => SelectSubCategory(p), errorReporter: _errors);
-        SelectEntryCommand = new RelayCommand("SelectEntry", p => SelectEntry(p), errorReporter: _errors);
-        SelectAllSubCategoriesCommand = new RelayCommand("SelectAllSubCategories", p => SelectAllSubCategories(p), errorReporter: _errors);
-        SelectNoneSubCategoriesCommand = new RelayCommand("SelectNoneSubCategories", p => SelectNoneSubCategories(p), errorReporter: _errors);
-        SelectAllEntriesCommand = new RelayCommand("SelectAllEntries", p => SelectAllEntries(p), errorReporter: _errors);
-        SelectNoneEntriesCommand = new RelayCommand("SelectNoneEntries", p => SelectNoneEntries(p), errorReporter: _errors);
-
-        MoveCategoryUpCommand = new RelayCommand("MoveCategoryUp", p => MoveCategoryUp(p), errorReporter: _errors);
-        MoveCategoryDownCommand = new RelayCommand("MoveCategoryDown", p => MoveCategoryDown(p), errorReporter: _errors);
-        MoveSubCategoryUpCommand = new RelayCommand("MoveSubCategoryUp", p => MoveSubCategoryUp(p), errorReporter: _errors);
-        MoveSubCategoryDownCommand = new RelayCommand("MoveSubCategoryDown", p => MoveSubCategoryDown(p), errorReporter: _errors);
-
-        MoveEntryUpCommand = new RelayCommand("MoveEntryUp", p => MoveEntryUp(p), errorReporter: _errors);
-        MoveEntryDownCommand = new RelayCommand("MoveEntryDown", p => MoveEntryDown(p), errorReporter: _errors);
-        SaveEntryFileCommand = new RelayCommand("SaveEntryFile", _ => SaveEntryFile(), errorReporter: _errors);
-        OpenEntryFileCommand = new RelayCommand("OpenEntryFile", _ => OpenEntryFile(), errorReporter: _errors);
-
-        RandomizeCategoryOnceCommand = new RelayCommand("RandomizeCategoryOnce", p => RandomizeCategoryOnce(p), errorReporter: _errors);
-        RandomizeSubCategoryOnceCommand = new RelayCommand("RandomizeSubCategoryOnce", p => RandomizeSubCategoryOnce(p), errorReporter: _errors);
 
         _errors.Info("MainViewModel ctor end");
 
@@ -797,22 +595,11 @@ private string _promptText = "";
                     for (var i = 0; i < Categories.Count; i++)
                         Categories[i].Order = i;
 
-                    SelectedCategory = Categories.FirstOrDefault();
-                    ActiveCategory = SelectedCategory;
                     // Default behavior: categories start in "use all subcategories" mode, but we do NOT override per-subcategory file mode.
                     foreach (var c in Categories)
                     {
                         c.UseAllSubCategories = true;
-                        c.SelectedSubCategory = c.SubCategories.FirstOrDefault();
                     }
-// Previews are informational. Populate only for expanded items.
-                    foreach (var s in Categories.SelectMany(c => c.SubCategories))
-                    {
-                        if (s.IsExpanded)
-                            RefreshSubCategoryPreview(s);
-                    }
-
-                    SelectedSubCategory = Categories.SelectMany(c => c.SubCategories).FirstOrDefault();
                 });
             });
 
@@ -868,19 +655,10 @@ private string _promptText = "";
             _errors.UiEvent("Category.Toggle", new { category = cat.Name, enabled = cat.Enabled });
         else if (p == nameof(CategoryModel.UseAllSubCategories))
             _errors.UiEvent("Category.UseAllSubCategories", new { category = cat.Name, value = cat.UseAllSubCategories });
-        else if (p == nameof(CategoryModel.SelectedSubCategory))
-            _errors.UiEvent("Category.SelectSubCategory", new { category = cat.Name, sub = cat.SelectedSubCategory?.Name });
         else if (p == nameof(CategoryModel.Order))
             _errors.UiEvent("Category.Reorder", new { category = cat.Name, order = cat.Order });
         else if (p == nameof(CategoryModel.Prefix) || p == nameof(CategoryModel.Suffix))
             _errors.UiEvent("Category.TextEdit", new { category = cat.Name, field = p, len = (p == nameof(CategoryModel.Prefix) ? cat.Prefix?.Length : cat.Suffix?.Length) });
-
-        // Keep the global SelectedSubCategory aligned with per-category selection.
-        if (args.PropertyName == nameof(CategoryModel.SelectedSubCategory) && cat.SelectedSubCategory is not null)
-        {
-            if (!ReferenceEquals(SelectedSubCategory, cat.SelectedSubCategory))
-                SelectedSubCategory = cat.SelectedSubCategory;
-        }
 
         QueueRecomputePrompt();
     }
@@ -890,18 +668,12 @@ private string _promptText = "";
     {
         if (sender is not PromptEntryModel entry) return;
         if (IsBulkUpdating()) return;
-        if (_refreshingPreview) return;
 
         var p = args.PropertyName ?? "";
         if (p == nameof(PromptEntryModel.Enabled))
             _errors.UiEvent("Entry.Toggle", new { file = entry.Name, enabled = entry.Enabled });
         else if (p == nameof(PromptEntryModel.Order))
             _errors.UiEvent("Entry.Reorder", new { file = entry.Name, order = entry.Order });
-
-        // Refresh previews if the changed entry belongs to the selected subcategory.
-        var parentSub = Categories.SelectMany(c => c.SubCategories).FirstOrDefault(s => s.Entries.Contains(entry));
-        if (parentSub is not null && ReferenceEquals(parentSub, SelectedSubCategory))
-            RefreshSelectedPreview();
 
         QueueRecomputePrompt();
     }
@@ -910,10 +682,6 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
     {
         if (sender is not SubCategoryModel sub) return;
         if (IsBulkUpdating()) return;
-
-        // If we're currently refreshing previews, ignore property-changed callbacks that were
-        // caused by that refresh (EntrySummary changes in particular).
-        if (_refreshingPreview) return;
 
         var p = args.PropertyName ?? "";
 
@@ -937,10 +705,6 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         if (prop == nameof(SubCategoryModel.IsDropTarget) || prop == nameof(SubCategoryModel.EntrySummary))
             return;
 
-        // Keep per-subcategory preview in sync when expanded.
-        if (prop == nameof(SubCategoryModel.IsExpanded) && sub.IsExpanded)
-            RefreshSubCategoryPreview(sub);
-
         // CurrentEntry is set during prompt generation. Treat it as output-only.
         // Do NOT refresh previews or trigger prompt recompute from it, or we can end up
         // in a feedback loop (Generate -> CurrentEntry -> PropertyChanged -> Recompute -> ...).
@@ -954,10 +718,6 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
             }
             return;
         }
-
-        // Only refresh the selected preview for meaningful input changes.
-        if (ReferenceEquals(sub, SelectedSubCategory))
-            RefreshSelectedPreview();
 
         QueueRecomputePrompt();
     }
@@ -1175,7 +935,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 ? null
                 : (seedLong.Value <= int.MaxValue ? (int)seedLong.Value : int.MaxValue);
 
-            var result = _engine.Generate(Categories, seed);
+            var result = _promptGeneration.Generate(seed);
             PromptText = result.Prompt;
             SystemMessages = string.Join(Environment.NewLine, result.Messages);
         }
@@ -1243,7 +1003,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 var promptSeed = _random.Next(0, int.MaxValue);
                 try
                 {
-                    var res = _engine.Generate(Categories, promptSeed);
+                    var res = _promptGeneration.Generate(promptSeed);
                     prompt = res.Prompt;
                 }
                 catch
@@ -1806,321 +1566,6 @@ private void SaveOutput()
     }
 
     
-    private void SelectEntry(object? param)
-    {
-        if (param is PromptEntryModel entry)
-        {
-            // Ensure parent subcategory is selected for editing context *before* setting SelectedEntry
-            // so that the SelectedEntry setter can mirror the selection onto SubCategoryModel.SelectedEntry.
-            var parentSub = Categories.SelectMany(c => c.SubCategories).FirstOrDefault(s => s.Entries.Contains(entry));
-            if (parentSub is not null && !ReferenceEquals(SelectedSubCategory, parentSub))
-                SelectedSubCategory = parentSub;
-
-            SelectedEntry = entry;
-        }
-    }
-
-    private void MoveEntryUp(object? param)
-    {
-        if (param is not PromptEntryModel entry) return;
-        var sub = Categories.SelectMany(c => c.SubCategories).FirstOrDefault(s => s.Entries.Contains(entry));
-        if (sub is null) return;
-
-        var idx = sub.Entries.IndexOf(entry);
-        if (idx <= 0) return;
-
-        sub.Entries.Move(idx, idx - 1);
-        NormalizeEntryOrders(sub);
-        QueueRecomputePrompt();
-    }
-
-    private void MoveEntryDown(object? param)
-    {
-        if (param is not PromptEntryModel entry) return;
-        var sub = Categories.SelectMany(c => c.SubCategories).FirstOrDefault(s => s.Entries.Contains(entry));
-        if (sub is null) return;
-
-        var idx = sub.Entries.IndexOf(entry);
-        if (idx < 0 || idx >= sub.Entries.Count - 1) return;
-
-        sub.Entries.Move(idx, idx + 1);
-        NormalizeEntryOrders(sub);
-        QueueRecomputePrompt();
-    }
-
-    private static void NormalizeEntryOrders(SubCategoryModel sub)
-    {
-        for (var i = 0; i < sub.Entries.Count; i++)
-            sub.Entries[i].Order = i;
-    }
-
-    private void LoadSelectedEntryFile()
-    {
-        if (SelectedEntry is null)
-        {
-            EntryEditorPath = "";
-            EntryEditorText = "";
-            return;
-        }
-
-        try
-        {
-            EntryEditorPath = SelectedEntry.FilePath;
-            EntryEditorText = _fileSystem.FileExists(SelectedEntry.FilePath) ? _fileSystem.ReadAllText(SelectedEntry.FilePath) : "";
-        }
-        catch (Exception ex)
-        {
-            _errors.Report(ex, "LoadSelectedEntryFile");
-            EntryEditorText = "(unable to read file)";
-        }
-    }
-
-    private void SaveEntryFile()
-    {
-        if (SelectedEntry is null) return;
-        try
-        {
-            _fileSystem.WriteAllText(SelectedEntry.FilePath, EntryEditorText ?? "");
-            _errors.Info("Saved entry file: " + SelectedEntry.FilePath);
-            RefreshSelectedPreview();
-
-            // Keep file selection in sync: when subcategory changes, default to its selected/first file.
-            if (SelectedSubCategory is not null)
-                SelectedEntry = SelectedSubCategory.SelectedEntry ?? SelectedSubCategory.Entries.FirstOrDefault();
-
-            QueueRecomputePrompt();
-        }
-        catch (Exception ex)
-        {
-            _errors.Report(ex, "SaveEntryFile");
-        }
-    }
-
-    private void OpenEntryFile()
-    {
-        if (SelectedEntry is null) return;
-        try
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = SelectedEntry.FilePath,
-                UseShellExecute = true
-            };
-            _process.Start(psi);
-        }
-        catch (Exception ex)
-        {
-            _errors.Report(ex, "OpenEntryFile");
-        }
-    }
-
-private void SelectSubCategory(object? param)
-    {
-        if (param is SubCategoryModel sub)
-            SelectedSubCategory = sub;
-    }
-
-    public void MoveCategory(CategoryModel dragged, CategoryModel target)
-    {
-        var from = Categories.IndexOf(dragged);
-        var to = Categories.IndexOf(target);
-        if (from < 0 || to < 0 || from == to) return;
-
-        Categories.Move(from, to);
-
-        for (var i = 0; i < Categories.Count; i++)
-            Categories[i].Order = i;
-
-        QueueRecomputePrompt(immediate: true);
-    }
-
-    private void MoveCategoryUp(object? param)
-    {
-        if (param is not CategoryModel cat) return;
-        var from = Categories.IndexOf(cat);
-        if (from <= 0) return;
-        Categories.Move(from, from - 1);
-        for (var i = 0; i < Categories.Count; i++)
-            Categories[i].Order = i;
-        QueueRecomputePrompt(immediate: true);
-    }
-
-    private void MoveCategoryDown(object? param)
-    {
-        if (param is not CategoryModel cat) return;
-        var from = Categories.IndexOf(cat);
-        if (from < 0 || from >= Categories.Count - 1) return;
-        Categories.Move(from, from + 1);
-        for (var i = 0; i < Categories.Count; i++)
-            Categories[i].Order = i;
-        QueueRecomputePrompt(immediate: true);
-    }
-
-    public void MoveSubCategory(CategoryModel parent, SubCategoryModel dragged, SubCategoryModel target)
-    {
-        var from = parent.SubCategories.IndexOf(dragged);
-        var to = parent.SubCategories.IndexOf(target);
-        if (from < 0 || to < 0 || from == to) return;
-
-        parent.SubCategories.Move(from, to);
-        for (var i = 0; i < parent.SubCategories.Count; i++)
-            parent.SubCategories[i].Order = i;
-
-        QueueRecomputePrompt(immediate: true);
-    }
-
-    private void MoveSubCategoryUp(object? param)
-    {
-        if (param is not SubCategoryModel sub) return;
-        var parent = Categories.FirstOrDefault(c => c.SubCategories.Contains(sub));
-        if (parent is null) return;
-        var idx = parent.SubCategories.IndexOf(sub);
-        if (idx <= 0) return;
-        parent.SubCategories.Move(idx, idx - 1);
-        for (var i = 0; i < parent.SubCategories.Count; i++)
-            parent.SubCategories[i].Order = i;
-        QueueRecomputePrompt(immediate: true);
-    }
-
-    private void MoveSubCategoryDown(object? param)
-    {
-        if (param is not SubCategoryModel sub) return;
-        var parent = Categories.FirstOrDefault(c => c.SubCategories.Contains(sub));
-        if (parent is null) return;
-        var idx = parent.SubCategories.IndexOf(sub);
-        if (idx < 0 || idx >= parent.SubCategories.Count - 1) return;
-        parent.SubCategories.Move(idx, idx + 1);
-        for (var i = 0; i < parent.SubCategories.Count; i++)
-            parent.SubCategories[i].Order = i;
-        QueueRecomputePrompt(immediate: true);
-    }
-
-    private void SelectAllSubCategories(object? param)
-    {
-        if (param is not CategoryModel cat) return;
-        BulkUpdate(() =>
-        {
-            // UX: "All" implies the category itself is enabled.
-            cat.Enabled = true;
-            foreach (var s in cat.SubCategories) s.Enabled = true;
-        });
-    }
-
-    private void SelectNoneSubCategories(object? param)
-    {
-        if (param is not CategoryModel cat) return;
-        BulkUpdate(() =>
-        {
-            foreach (var s in cat.SubCategories) s.Enabled = false;
-        });
-    }
-
-private void SelectAllEntries(object? param)
-{
-    if (param is not SubCategoryModel sub) return;
-    BulkUpdate(() =>
-    {
-        foreach (var e in sub.Entries) e.Enabled = true;
-    });
-}
-
-private void SelectNoneEntries(object? param)
-{
-    if (param is not SubCategoryModel sub) return;
-    BulkUpdate(() =>
-    {
-        foreach (var e in sub.Entries) e.Enabled = false;
-    });
-}
-
-
-    private void RefreshSelectedPreview()
-    {
-        if (!_dispatcher.CheckAccess())
-        {
-            _dispatcher.Invoke(RefreshSelectedPreview);
-            return;
-        }
-
-        if (_refreshingPreview) return;
-        try
-        {
-            _refreshingPreview = true;
-
-            SelectedSubCategoryPreview.Clear();
-
-            if (SelectedSubCategory is null)
-            {
-                SelectedSubCategoryEntrySummary = "No subcategory selected.";
-                return;
-            }
-
-            RefreshSubCategoryPreview(SelectedSubCategory);
-
-            // Mirror the currently selected subcategory into legacy fields (no longer shown in 1.5.1 UI).
-            SelectedSubCategoryEntrySummary = SelectedSubCategory.EntrySummary;
-            foreach (var e in SelectedSubCategory.PreviewEntries.Take(120))
-                SelectedSubCategoryPreview.Add(e);
-        }
-        finally
-        {
-            _refreshingPreview = false;
-        }
-    }
-
-    private void RefreshSubCategoryPreview(SubCategoryModel sub)
-    {
-        if (!_dispatcher.CheckAccess())
-        {
-            _dispatcher.Invoke(() => RefreshSubCategoryPreview(sub));
-            return;
-        }
-
-        sub.PreviewEntries.Clear();
-
-        // Decide which files are currently active for preview.
-        var enabled = sub.Entries
-            .OrderBy(e => e.Order)
-            .ThenBy(e => e.Name)
-            .Where(e => e.Enabled)
-            .ToList();
-
-        List<string> entries;
-        try
-        {
-            if (sub.UseAllTxtFiles)
-            {
-                var files = enabled.Count > 0 ? enabled : sub.Entries.ToList();
-                entries = files.SelectMany(e => _fileReader.LoadWildcardFile(e.FilePath)).ToList();
-            }
-            else
-            {
-                var selected = sub.SelectedEntry ?? enabled.FirstOrDefault() ?? sub.Entries.FirstOrDefault();
-                if (selected is null)
-                {
-                    sub.EntrySummary = "(no entry files)";
-                    return;
-                }
-                entries = _fileReader.LoadWildcardFile(selected.FilePath);
-            }
-        }
-        catch (Exception ex)
-        {
-            _errors.Report(ex, "RefreshSubCategoryPreview:LoadEntries");
-            sub.EntrySummary = "(unable to load entries)";
-            return;
-        }
-
-        sub.EntrySummary = $"{entries.Count} entries loaded.";
-        foreach (var e in entries.Take(200))
-            sub.PreviewEntries.Add(e);// Keep the summary informative even before the first prompt generation.
-        if (!string.IsNullOrWhiteSpace(sub.CurrentEntry))
-            sub.EntrySummary = $"{entries.Count} entries loaded.\nCurrent entry: {sub.CurrentEntry}";
-    }
-
-    private string FindParentCategoryName(SubCategoryModel sub)
-        => Categories.FirstOrDefault(c => c.SubCategories.Contains(sub))?.Name ?? "?";
-
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
