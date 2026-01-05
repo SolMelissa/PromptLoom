@@ -1,4 +1,5 @@
 // CHANGE LOG
+// - 2026-01-05 | Fix: Tag count test setup | Create the second directory before writing the test file.
 // - 2026-01-02 | Request: Global tag counts | Validate tag counts across all files.
 // - 2026-01-02 | Request: Related tag scoring | Verify weighted relevance percentages.
 // - 2026-01-02 | Request: Tag match counts | Validate match counts in search results.
@@ -174,6 +175,7 @@ public sealed class TagSearchTests
         var filePathB = Path.Combine(categoriesDir, "Body", "Leg", "Old.txt");
 
         Directory.CreateDirectory(Path.GetDirectoryName(filePathA)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(filePathB)!);
         File.WriteAllText(filePathA, "seed");
         File.WriteAllText(filePathB, "seed seed");
 
