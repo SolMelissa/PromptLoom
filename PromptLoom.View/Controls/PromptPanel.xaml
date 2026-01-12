@@ -1,5 +1,6 @@
 <!--
 CHANGE LOG
+- 2026-03-09 | Request: Wrap batch results | Allow batch thumbnails to wrap within each batch card.
 - 2026-03-05 | Request: Remove view-only editor | Drop file editor tab after view decoupling.
 - 2026-03-02 | Request: Prompt control layout tweaks | Center headers, inline seeds, and simplify actions.
 - 2026-03-02 | Request: Batch/seed alignment | Show qty inline and align seed rows.
@@ -311,15 +312,13 @@ CHANGE LOG
                                                                                Text="{Binding SettingsSummary, Converter={StaticResource OneLine}}"/>
                                                                 </StackPanel>
 
-                                                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                                                                    <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ThumbTemplate}">
-                                                                        <ItemsControl.ItemsPanel>
-                                                                            <ItemsPanelTemplate>
-                                                                                <StackPanel Orientation="Horizontal"/>
-                                                                            </ItemsPanelTemplate>
-                                                                        </ItemsControl.ItemsPanel>
-                                                                    </ItemsControl>
-                                                                </ScrollViewer>
+                                                                <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ThumbTemplate}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <WrapPanel Orientation="Horizontal"/>
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                </ItemsControl>
                                                             </DockPanel>
                                                         </Border>
                                                     </DataTemplate>
@@ -350,15 +349,13 @@ CHANGE LOG
                                                                 </Border>
 
                                                                 <!-- Thumbnails -->
-                                                                <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                                                                    <ItemsControl x:Name="SmallThumbs" ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ThumbTemplate}">
-                                                                        <ItemsControl.ItemsPanel>
-                                                                            <ItemsPanelTemplate>
-                                                                                <StackPanel Orientation="Horizontal"/>
-                                                                            </ItemsPanelTemplate>
-                                                                        </ItemsControl.ItemsPanel>
-                                                                    </ItemsControl>
-                                                                </ScrollViewer>
+                                                                <ItemsControl x:Name="SmallThumbs" Grid.Column="1" ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ThumbTemplate}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <WrapPanel Orientation="Horizontal"/>
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                </ItemsControl>
                                                             </Grid>
                                                         </Border>
                                                     </DataTemplate>

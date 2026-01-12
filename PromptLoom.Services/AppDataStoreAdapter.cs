@@ -1,9 +1,7 @@
-// FIX: Wrap static AppDataStore access to allow injection in tests.
-// CAUSE: Static AppDataStore usage in view models made AppData paths hard to mock.
-// CHANGE: Introduce IAppDataStore and a default adapter. 2025-12-25
-// FIX: Accept IErrorReporter for logging seam support.
-// CAUSE: AppDataStore methods require ErrorReporter; tests use IErrorReporter.
-// CHANGE: Adapt IErrorReporter to ErrorReporter.Instance when needed. 2025-12-25
+// CHANGE LOG
+// - 2026-03-09 | Request: Categories AppData path | Document LibraryDir as Categories storage for legacy naming.
+// - 2026-03-06 | Request: Tag-only mode | Rename app data contract to library storage.
+// - 2025-12-25 | Fix: AppDataStore seam | Wrap static AppDataStore access to allow injection in tests.
 
 namespace PromptLoom.Services;
 
@@ -18,9 +16,9 @@ public interface IAppDataStore
     string RootDir { get; }
 
     /// <summary>
-    /// Categories directory.
+    /// Categories directory (legacy name: LibraryDir).
     /// </summary>
-    string CategoriesDir { get; }
+    string LibraryDir { get; }
 
     /// <summary>
     /// Output directory.
@@ -31,11 +29,6 @@ public interface IAppDataStore
     /// Ensures the AppData store is initialized.
     /// </summary>
     void EnsureInitialized(string installDir, IErrorReporter errors);
-
-    /// <summary>
-    /// Restores bundled categories.
-    /// </summary>
-    void RestoreBundledCategories(string installDir, IErrorReporter errors);
 }
 
 /// <summary>
@@ -46,17 +39,13 @@ public sealed class AppDataStoreAdapter : IAppDataStore
     /// <inheritdoc/>
     public string RootDir => AppDataStore.RootDir;
     /// <inheritdoc/>
-    public string CategoriesDir => AppDataStore.CategoriesDir;
+    public string LibraryDir => AppDataStore.LibraryDir;
     /// <inheritdoc/>
     public string OutputDir => AppDataStore.OutputDir;
 
     /// <inheritdoc/>
     public void EnsureInitialized(string installDir, IErrorReporter errors)
         => AppDataStore.EnsureInitialized(installDir, ResolveReporter(errors));
-
-    /// <inheritdoc/>
-    public void RestoreBundledCategories(string installDir, IErrorReporter errors)
-        => AppDataStore.RestoreBundledCategories(installDir, ResolveReporter(errors));
 
     private static ErrorReporter ResolveReporter(IErrorReporter errors)
         => (errors as ErrorReporterAdapter)?.Inner ?? ErrorReporter.Instance;

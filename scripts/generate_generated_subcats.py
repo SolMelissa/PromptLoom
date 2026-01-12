@@ -1,12 +1,12 @@
 # CHANGE LOG
+# - 2026-03-09 | Request: Tag-only mode | Point generated subcategories to the library folder.
 # - 2026-01-05 | Request: Expand impact, voyeur, latex, domme | Add fetish terms and variants.
 # - 2026-01-05 | Request: Add fetish subcategories | Add body focus, marks, restrictive outfits, voyeur/public.
-# - 2026-01-05 | Request: Expand fetish focus and camera subcategories | Add camera subcats and fetish tags.
 
 import os
 from datetime import datetime
 
-root = os.path.join(os.environ.get("LOCALAPPDATA", ""), "PromptLoom", "Categories", "Generated")
+root = os.path.join(os.environ.get("LOCALAPPDATA", ""), "PromptLoom", "Library", "Generated")
 if not os.path.isdir(root):
     raise SystemExit(f"Generated folder not found: {root}")
 

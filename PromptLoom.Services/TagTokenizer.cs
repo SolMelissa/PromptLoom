@@ -1,7 +1,10 @@
 // CHANGE LOG
+// - 2026-03-06 | Request: Lemmatization | Normalize tokens with XLemmatizer before counting.
 // - 2026-01-02 | Request: Tag search indexing | Add tag tokenizer with per-token counts.
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using XLemmatizer;
 
 namespace PromptLoom.Services;
 
@@ -21,6 +24,18 @@ public interface ITagTokenizer
 /// </summary>
 public sealed class TagTokenizer : ITagTokenizer
 {
+    private readonly Lemmatizer _lemmatizer;
+    private static readonly object s_logLock = new();
+    private static bool s_hasLoggedLemmatizerFailure;
+
+    /// <summary>
+    /// Creates a tokenizer that normalizes tokens with the provided lemmatizer.
+    /// </summary>
+    public TagTokenizer(Lemmatizer lemmatizer)
+    {
+        _lemmatizer = lemmatizer ?? throw new ArgumentNullException(nameof(lemmatizer));
+    }
+
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, int> Tokenize(IEnumerable<string> segments, IReadOnlySet<string> stopWords)
     {
@@ -33,7 +48,7 @@ public sealed class TagTokenizer : ITagTokenizer
         return counts;
     }
 
-    private static void AddTokens(IDictionary<string, int> counts, string segment, IReadOnlySet<string> stopWords)
+    private void AddTokens(IDictionary<string, int> counts, string segment, IReadOnlySet<string> stopWords)
     {
         if (string.IsNullOrWhiteSpace(segment))
             return;
@@ -55,11 +70,39 @@ public sealed class TagTokenizer : ITagTokenizer
                 if (stopWords.Contains(token))
                     continue;
 
-                if (counts.TryGetValue(token, out var count))
-                    counts[token] = count + 1;
+                var normalized = LemmatizeToken(token);
+                if (counts.TryGetValue(normalized, out var count))
+                    counts[normalized] = count + 1;
                 else
-                    counts[token] = 1;
+                    counts[normalized] = 1;
             }
+        }
+    }
+
+    private string LemmatizeToken(string token)
+    {
+        try
+        {
+            var tokens = _lemmatizer.Lemmatize(token);
+            var lemma = tokens.FirstOrDefault()?.Lemma;
+            return string.IsNullOrWhiteSpace(lemma) ? token : lemma.ToLowerInvariant();
+        }
+        catch (Exception ex)
+        {
+            LogLemmatizerFailure(ex, token);
+            return token;
+        }
+    }
+
+    private static void LogLemmatizerFailure(Exception ex, string token)
+    {
+        lock (s_logLock)
+        {
+            if (s_hasLoggedLemmatizerFailure)
+                return;
+
+            ErrorReporter.Instance.Error($"Lemmatizer failed for '{token}': {ex.Message}", "TagTokenizer");
+            s_hasLoggedLemmatizerFailure = true;
         }
     }
 }

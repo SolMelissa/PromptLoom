@@ -1,7 +1,8 @@
 // CHANGE LOG
+// - 2026-03-09 | Request: Background indexing progress | Report indexing progress to UI callers.
+// - 2026-03-06 | Request: Tag-only mode | Index tag data from the library root.
+// - 2026-03-06 | Request: TF-IDF metadata | Populate per-tag occurring file counts during indexing.
 // - 2026-01-02 | Request: Tag source counts | Track filename/path/content counts for weighting.
-// - 2026-01-02 | Fix: Content tag reindex | Force a full rescan when tag index version changes.
-// - 2026-01-02 | Request: Content tag indexing | Include file contents in tag counts.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,22 +26,35 @@ public sealed class TagIndexSyncResult
 }
 
 /// <summary>
+/// Progress updates during tag indexing.
+/// </summary>
+public sealed record TagIndexProgress(string Stage, int Processed, int Total)
+{
+    /// <summary>
+    /// Percentage complete when total is known, otherwise 0.
+    /// </summary>
+    public int Percent => Total <= 0 ? 0 : (int)Math.Round(Processed * 100d / Total);
+}
+
+/// <summary>
 /// Abstraction for synchronizing the tag index.
 /// </summary>
 public interface ITagIndexer
 {
     /// <summary>
-    /// Synchronizes the tag index with the Categories directory.
+    /// Synchronizes the tag index with the library directory.
     /// </summary>
-    Task<TagIndexSyncResult> SyncAsync(CancellationToken ct = default);
+    /// <param name="ct">Cancellation token for the sync pass.</param>
+    /// <param name="progress">Optional progress updates for long-running scans.</param>
+    Task<TagIndexSyncResult> SyncAsync(CancellationToken ct = default, IProgress<TagIndexProgress>? progress = null);
 }
 
 /// <summary>
-/// Default tag indexer that scans Categories and syncs SQLite storage.
+/// Default tag indexer that scans the library and syncs SQLite storage.
 /// </summary>
 public sealed class TagIndexer : ITagIndexer
 {
-    private const int CurrentIndexVersion = 3;
+    private const int CurrentIndexVersion = 5; // bump to reindex now that tokens are lemmatized
     private static readonly SemaphoreSlim IndexLock = new(1, 1);
 
     private readonly ITagIndexStore _tagIndexStore;
@@ -70,7 +84,7 @@ public sealed class TagIndexer : ITagIndexer
     }
 
     /// <inheritdoc/>
-    public async Task<TagIndexSyncResult> SyncAsync(CancellationToken ct = default)
+    public async Task<TagIndexSyncResult> SyncAsync(CancellationToken ct = default, IProgress<TagIndexProgress>? progress = null)
     {
         await IndexLock.WaitAsync(ct);
         try
@@ -78,8 +92,11 @@ public sealed class TagIndexer : ITagIndexer
             await _tagIndexStore.InitializeAsync(ct);
 
             var stopWords = _stopWordsStore.LoadOrCreate();
-            var categoriesRoot = _appDataStore.CategoriesDir;
-            var snapshots = BuildSnapshots(categoriesRoot);
+            var libraryRoot = _appDataStore.LibraryDir;
+            progress?.Report(new TagIndexProgress("Scanning category files", 0, 0));
+            var snapshots = BuildSnapshots(libraryRoot);
+            var totalSnapshots = snapshots.Count;
+            progress?.Report(new TagIndexProgress("Indexing tags", 0, totalSnapshots));
 
             await using var connection = _tagIndexStore.CreateConnection();
             await connection.OpenAsync(ct);
@@ -169,8 +186,11 @@ public sealed class TagIndexer : ITagIndexer
                 out var insertContentCountParam);
 
             var tagIdCache = new Dictionary<string, long>(StringComparer.Ordinal);
+            var processed = 0;
+            var lastPercent = -1;
             foreach (var snapshot in snapshots.Values)
             {
+                processed++;
                 var hasExisting = existingFiles.TryGetValue(snapshot.Path, out var existing);
                 var isNew = forceResync || !hasExisting || existing == null || existing.LastWriteTicks != snapshot.LastWriteTicks;
 
@@ -196,7 +216,7 @@ public sealed class TagIndexer : ITagIndexer
                 deleteFileTagsParam.Value = fileId;
                 await deleteFileTagsCommand.ExecuteNonQueryAsync(ct);
 
-                var tagCounts = BuildTagCounts(categoriesRoot, snapshot.Path, stopWords);
+                var tagCounts = BuildTagCounts(libraryRoot, snapshot.Path, stopWords);
                 foreach (var entry in tagCounts)
                 {
                     var breakdown = entry.Value;
@@ -217,7 +237,19 @@ public sealed class TagIndexer : ITagIndexer
                     insertContentCountParam.Value = breakdown.ContentCount;
                     await insertFileTagCommand.ExecuteNonQueryAsync(ct);
                 }
+
+                if (totalSnapshots > 0)
+                {
+                    var percent = (int)Math.Round(processed * 100d / totalSnapshots);
+                    if (percent != lastPercent && (percent % 5 == 0 || percent == 100))
+                    {
+                        lastPercent = percent;
+                        progress?.Report(new TagIndexProgress("Indexing tags", processed, totalSnapshots));
+                    }
+                }
             }
+
+            progress?.Report(new TagIndexProgress("Finalizing index", processed, totalSnapshots));
 
             await ExecuteNonQueryAsync(
                 connection,
@@ -228,10 +260,17 @@ public sealed class TagIndexer : ITagIndexer
             await ExecuteNonQueryAsync(
                 connection,
                 transaction,
-                "UPDATE IndexState SET LastScanTicks = $ticks, CategoriesRoot = $categoriesRoot, IndexVersion = $indexVersion WHERE Id = 1;",
+                "UPDATE Tags SET OccurringFileCount = " +
+                "(SELECT COUNT(DISTINCT FileId) FROM FileTags WHERE TagId = Tags.Id);",
+                ct);
+
+            await ExecuteNonQueryAsync(
+                connection,
+                transaction,
+                "UPDATE IndexState SET LastScanTicks = $ticks, LibraryRoot = $libraryRoot, IndexVersion = $indexVersion WHERE Id = 1;",
                 ct,
                 ("$ticks", _clock.Now.Ticks),
-                ("$categoriesRoot", categoriesRoot),
+                ("$libraryRoot", libraryRoot),
                 ("$indexVersion", CurrentIndexVersion));
 
             await ExecuteNonQueryAsync(connection, transaction, "INSERT INTO TagFts(TagFts) VALUES('rebuild');", ct);
@@ -256,13 +295,13 @@ public sealed class TagIndexer : ITagIndexer
         }
     }
 
-    private Dictionary<string, FileSnapshot> BuildSnapshots(string categoriesRoot)
+    private Dictionary<string, FileSnapshot> BuildSnapshots(string libraryRoot)
     {
         var snapshots = new Dictionary<string, FileSnapshot>(StringComparer.OrdinalIgnoreCase);
-        if (!_fileSystem.DirectoryExists(categoriesRoot))
+        if (!_fileSystem.DirectoryExists(libraryRoot))
             return snapshots;
 
-        foreach (var path in _fileSystem.EnumerateFiles(categoriesRoot, "*.txt", SearchOption.AllDirectories))
+        foreach (var path in _fileSystem.EnumerateFiles(libraryRoot, "*.txt", SearchOption.AllDirectories))
         {
             var lastWriteTicks = File.GetLastWriteTimeUtc(path).Ticks;
             var fileName = Path.GetFileNameWithoutExtension(path);
@@ -272,9 +311,9 @@ public sealed class TagIndexer : ITagIndexer
         return snapshots;
     }
 
-    private IReadOnlyDictionary<string, TagCountBreakdown> BuildTagCounts(string categoriesRoot, string filePath, IReadOnlySet<string> stopWords)
+    private IReadOnlyDictionary<string, TagCountBreakdown> BuildTagCounts(string libraryRoot, string filePath, IReadOnlySet<string> stopWords)
     {
-        var relativePath = Path.GetRelativePath(categoriesRoot, filePath);
+        var relativePath = Path.GetRelativePath(libraryRoot, filePath);
         var segments = relativePath.Split(
             new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
             StringSplitOptions.RemoveEmptyEntries);

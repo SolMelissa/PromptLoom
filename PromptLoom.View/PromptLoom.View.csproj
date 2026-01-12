@@ -1,10 +1,8 @@
 <!--
 CHANGE LOG
+- 2026-03-06 | Request: Tag-only mode | Ship library content instead of category bundles.
+- 2026-01-07 | Request: Fix lemmatizer crash | Include XLemmatizer lookup resource in build output.
 - 2026-01-02 | Request: Tag search storage | Add SQLite + FTS5 packages.
-- 2025-12-31 | Request: MVVM split | Rename app project to PromptLoom.View and update project references/paths.
-- 2025-12-31 | Request: Exclude referenced project sources | Prevented compiling SwarmUi.Client sources in the app project glob.
-- 2025-12-31 | Request: Prevent nested obj/bin compile | Excluded **\obj\** and **\bin\** from compile and item excludes to avoid duplicate assembly info.
-- 2025-12-29 | Request: Centralize versioning | Removed local version metadata and rely on Directory.Build.props.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -31,8 +29,10 @@ CHANGE LOG
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Copy sample/user categories into the build output so the app can find them when run from bin/Debug or a published folder. -->
-    <Content Include="..\Categories\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Copy library content into the build output so the app can seed data when run from bin/Debug or a published folder. -->
+    <Content Include="..\Library\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Lemmatizer lookup data must ship with the app. -->
+    <Content Include="..\Resources\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

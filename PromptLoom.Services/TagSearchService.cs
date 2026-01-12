@@ -25,6 +25,11 @@ public sealed record TagFileInfo(string Path, string FileName, int MatchCount)
     /// Relative relevance for the current result set (0-100).
     /// </summary>
     public int RelevancePercent { get; init; }
+
+    /// <summary>
+    /// TF-IDF score used to compute relevance.
+    /// </summary>
+    public double RelevanceScore { get; init; }
 }
 
 /// <summary>
@@ -70,6 +75,11 @@ public interface ITagSearchService
         IReadOnlyCollection<string> filePaths,
         int limit,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Normalizes the provided tag for comparison against the index.
+    /// </summary>
+    string NormalizeTag(string tag);
 }
 
 /// <summary>
@@ -84,6 +94,7 @@ public sealed class TagSearchService : ITagSearchService
     private readonly ITagIndexStore _tagIndexStore;
     private readonly IStopWordsStore _stopWordsStore;
     private readonly ITagTokenizer _tokenizer;
+    private IReadOnlySet<string>? _cachedStopWords;
 
     /// <summary>
     /// Creates a new tag search service.
@@ -133,12 +144,7 @@ public sealed class TagSearchService : ITagSearchService
         if (tags.Count == 0)
             return Array.Empty<TagFileInfo>();
 
-        var normalizedTags = tags
-            .Select(tag => tag.Trim().ToLowerInvariant())
-            .Where(tag => tag.Length > 0)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
+        var normalizedTags = NormalizeTags(tags);
         if (normalizedTags.Count == 0)
             return Array.Empty<TagFileInfo>();
 
@@ -180,12 +186,7 @@ public sealed class TagSearchService : ITagSearchService
         if (tags.Count == 0 || filePaths.Count == 0)
             return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        var normalizedTags = tags
-            .Select(tag => tag.Trim().ToLowerInvariant())
-            .Where(tag => tag.Length > 0)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
+        var normalizedTags = NormalizeTags(tags);
         if (normalizedTags.Count == 0)
             return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
@@ -231,12 +232,7 @@ public sealed class TagSearchService : ITagSearchService
         if (tags.Count == 0)
             return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        var normalizedTags = tags
-            .Select(tag => tag.Trim().ToLowerInvariant())
-            .Where(tag => tag.Length > 0)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
+        var normalizedTags = NormalizeTags(tags);
         if (normalizedTags.Count == 0)
             return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
@@ -275,12 +271,7 @@ public sealed class TagSearchService : ITagSearchService
         if (selectedTags.Count == 0 || filePaths.Count == 0 || limit <= 0)
             return Array.Empty<TagRelatedInfo>();
 
-        var normalizedTags = selectedTags
-            .Select(tag => tag.Trim().ToLowerInvariant())
-            .Where(tag => tag.Length > 0)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
+        var normalizedTags = NormalizeTags(selectedTags);
         if (normalizedTags.Count == 0)
             return Array.Empty<TagRelatedInfo>();
 
@@ -334,6 +325,43 @@ public sealed class TagSearchService : ITagSearchService
         return scored
             .Select(entry => new TagRelatedInfo(entry.Name, ToPercent(entry.Score, maxScore)))
             .ToList();
+    }
+
+    /// <inheritdoc/>
+    public string NormalizeTag(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+            return string.Empty;
+
+        var trimmed = tag.Trim().ToLowerInvariant();
+        if (trimmed.Length == 0)
+            return string.Empty;
+
+        var tokens = _tokenizer.Tokenize(new[] { trimmed }, LoadStopWords());
+        if (tokens.Count == 0)
+            return trimmed;
+
+        return tokens.Keys.FirstOrDefault() ?? trimmed;
+    }
+
+    private IReadOnlySet<string> LoadStopWords()
+        => _cachedStopWords ??= _stopWordsStore.LoadOrCreate();
+
+    private IReadOnlyList<string> NormalizeTags(IEnumerable<string> tags)
+    {
+        var normalized = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var tag in tags)
+        {
+            var value = NormalizeTag(tag);
+            if (string.IsNullOrEmpty(value))
+                continue;
+
+            if (seen.Add(value))
+                normalized.Add(value);
+        }
+
+        return normalized;
     }
 
     private static int ToPercent(double score, double maxScore)

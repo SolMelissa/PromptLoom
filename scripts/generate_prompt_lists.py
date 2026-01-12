@@ -1,14 +1,14 @@
 # CHANGE LOG
+# - 2026-03-06 | Request: Tag-only mode | Target the library root for generated lists.
 # - 2026-01-05 | Fix: Dresses count | Add missing entry for validation.
 # - 2026-01-05 | Fix: ShotType count | Add missing entry for validation.
-# - 2026-01-05 | Request: Regenerate prompt lists | Generate runtime prompt list files.
 
 import os
 from datetime import datetime
 
-root = os.path.join(os.environ.get("LOCALAPPDATA", ""), "PromptLoom", "Categories")
+root = os.path.join(os.environ.get("LOCALAPPDATA", ""), "PromptLoom", "Library")
 if not os.path.isdir(root):
-    raise SystemExit(f"Categories not found: {root}")
+    raise SystemExit(f"Library not found: {root}")
 
 date = datetime.now().strftime("%Y-%m-%d")
 header = f"# CHANGE LOG\n# - {date} | Request: Regenerate prompt lists | Initial content.\n"

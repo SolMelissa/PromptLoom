@@ -1,7 +1,10 @@
 <!-- CHANGE LOG
-- 2026-01-05 | Fix: XAML parse failure | Replace invalid button glyphs with ASCII arrows.
+- 2026-03-09 | Fix: Search layout close tag | Close selected files grid and restore caret button text.
+- 2026-03-09 | Request: Search scroll | Ensure file search results scroll vertically in the main layout.
+- 2026-03-09 | Request: Clear selected files | Add a clear button to the selected files list.
+- 2026-03-06 | Request: Tag-only mode | Remove legacy menu items and rename library references.
+- 2026-03-06 | Request: View adjustments | Rename View to Build, remove tabbing, and constrain file lists.
 - 2026-03-05 | Request: Decouple views from generation | Remove Simple/Advanced tabs from main window.
-- 2026-03-02 | Request: Search file selection | Add selectable file pills with ordered selection list.
 -->
 <!-- Bugfix: Fix duplicate IconBtn resource key by renaming base style to IconBtnBase so style lookups are unambiguous. -->
 <!-- Bugfix: Allow the shared IconBtn style to apply to ToggleButton instances to prevent XamlParseException popups triggered by a Button-only style target. -->
@@ -21,7 +24,7 @@
         <conv:PastelByIndexConverter x:Key="PastelByIndex"/>
         <conv:AspectToVisibilityConverter x:Key="AspectToVis"/>
         <conv:OneLineTextConverter x:Key="OneLine"/>
-        <conv:CategoryPathConverter x:Key="CategoryPathConverter"/>
+        <conv:LibraryPathConverter x:Key="LibraryPathConverter"/>
 
         <DataTemplate x:Key="SwarmAssetCardTemplate">
             <Border Background="#14000000" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
@@ -39,7 +42,7 @@
         <!-- Vector icons (24x24) -->
         <Geometry x:Key="IcoChevronUp">M 12,6 L 6.5,11.5 L 8.0,13.0 L 12,9.0 L 16.0,13.0 L 17.5,11.5 Z</Geometry>
         <Geometry x:Key="IcoChevronDown">M 12,18 L 17.5,12.5 L 16.0,11.0 L 12,15.0 L 8.0,11.0 L 6.5,12.5 Z</Geometry>
-        <!-- Used for category ordering buttons embedded in the Advanced View tabs -->
+        <!-- Legacy ordering icons retained for layout compatibility -->
         <Geometry x:Key="IcoChevronLeft">M 9.5,12 L 14.5,7 L 16.0,8.5 L 12.5,12 L 16.0,15.5 L 14.5,17 Z</Geometry>
         <Geometry x:Key="IcoChevronRight">M 14.5,12 L 9.5,7 L 8.0,8.5 L 11.5,12 L 8.0,15.5 L 9.5,17 Z</Geometry>
         <Geometry x:Key="IcoSelectAll">M 6,7 H 18 V 9 H 6 Z M 6,11 H 18 V 13 H 6 Z M 6,15 H 18 V 17 H 6 Z M 4.5,12 L 3.2,10.7 L 2,11.9 L 4.5,14.4 L 8.7,10.2 L 7.5,9 Z</Geometry>
@@ -111,11 +114,7 @@
 
         <Menu DockPanel.Dock="Top" Background="{StaticResource PanelBg}">
             <MenuItem Header="File">
-                <MenuItem Header="Reload from Disk" Command="{Binding ReloadCommand}" />
-                <MenuItem Header="Save Config" Command="{Binding SaveCommand}" />
-                <MenuItem Header="Open Categories Folder" Command="{Binding OpenFolderCommand}" />
-                <Separator/>
-                <MenuItem Header="Restore Original Categories" Command="{Binding RestoreOriginalCategoriesCommand}" />
+                <MenuItem Header="Open Library Folder" Command="{Binding OpenFolderCommand}" />
                 <MenuItem Header="Save Prompt to Output" Command="{Binding SaveOutputCommand}" />
                 <Separator/>
                 <MenuItem Header="Exit" Click="Exit_Click"/>
@@ -147,24 +146,27 @@
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
 
 
-                    <TextBlock FontSize="26" FontWeight="SemiBold" Text="View" Foreground="{StaticResource AccentCyan}"/>
+                    <TextBlock FontSize="26" FontWeight="SemiBold" Text="Build" Foreground="{StaticResource AccentCyan}"/>
 
 
                 </StackPanel>
 
 
 
-            <TabControl Grid.Column="0" Background="Transparent" BorderThickness="0">
-                <TabItem Header="Search" DataContext="{Binding SearchViewModel}">
-                    <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="12">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+            <Border Background="{StaticResource PanelBg}"
+                    BorderBrush="{StaticResource BorderSoft}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="12"
+                    DataContext="{Binding SearchViewModel}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" Margin="0,0,0,10">
                                 <DockPanel LastChildFill="True">
@@ -266,9 +268,13 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Found files" Opacity="0.7" Margin="0,0,0,6"/>
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <Grid Grid.Column="0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Text="Found files" Opacity="0.7" Margin="0,0,0,6"/>
+                                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                                             <ItemsControl ItemsSource="{Binding Results}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
@@ -285,7 +291,7 @@
                                                                 CommandParameter="{Binding}">
                                                             <Button.Content>
                                                                 <TextBlock TextWrapping="Wrap" Width="240">
-                                                                    <Run Text="{Binding Path, Converter={StaticResource CategoryPathConverter}}"/>
+                                                                    <Run Text="{Binding Path, Converter={StaticResource LibraryPathConverter}}"/>
                                                                     <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
                                                                 </TextBlock>
                                                             </Button.Content>
@@ -294,299 +300,22 @@
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                         </ScrollViewer>
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Text="Selected files" Opacity="0.7" Margin="0,0,0,6"/>
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                            <ItemsControl ItemsSource="{Binding SelectedFiles}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <StackPanel/>
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                                            <Button Padding="10,4"
-                                                                    Margin="0,0,8,0"
-                                                                    Background="{StaticResource InputCyan}"
-                                                                    ToolTip="{Binding Path}"
-                                                                    Command="{Binding DataContext.RemoveSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                    CommandParameter="{Binding}">
-                                                                <Button.Content>
-                                                                    <TextBlock TextWrapping="Wrap" Width="240">
-                                                                        <Run Text="{Binding Path, Converter={StaticResource CategoryPathConverter}}"/>
-                                                                        <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
-                                                                    </TextBlock>
-                                                                </Button.Content>
-                                                            </Button>
-                                                            <Button Content="↑"
-                                                                    Width="24"
-                                                                    Height="24"
-                                                                    Margin="0,0,4,0"
-                                                                    Command="{Binding DataContext.MoveSelectedFileUpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                    CommandParameter="{Binding}"/>
-                                                            <Button Content="↓"
-                                                                    Width="24"
-                                                                    Height="24"
-                                                                    Margin="0,0,4,0"
-                                                                    Command="{Binding DataContext.MoveSelectedFileDownCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                    CommandParameter="{Binding}"/>
-                                                            <Button Content="x"
-                                                                    Width="24"
-                                                                    Height="24"
-                                                                    Command="{Binding DataContext.RemoveSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                    CommandParameter="{Binding}"/>
-                                                        </StackPanel>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </ScrollViewer>
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-
-                            <Grid Grid.Row="4" Margin="0,10,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <TextBlock Text="No files found in Categories." Opacity="0.7">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.EmptyIndex}">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <TextBlock Text="No files match the selected tags." Opacity="0.7">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.NoResults}">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource AccentPink}" TextWrapping="Wrap">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Error}">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </StackPanel>
-                                <Button Grid.Column="1"
-                                        Style="{StaticResource IconBtn}"
-                                        Margin="8,0,0,0"
-                                        VerticalAlignment="Center"
-                                        ToolTip="Refresh tags"
-                                        Command="{Binding RefreshCommand}">
-                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoRefresh}"/>
-                                </Button>
-                            </Grid>
-                        </Grid>
-                    </Border>
-                        </TabItem>
-                        
-                    </TabControl>
-
-            </DockPanel>
-
-            <!-- Prompt -->
-            <controls:PromptPanel Grid.Column="2"/>
-
-
-	        </Grid>
-
-	        <!-- Portrait (stacked) -->
-	        <Grid>
-	            <Grid.Visibility>
-	                <MultiBinding Converter="{StaticResource AspectToVis}">
-	                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" Path="ActualWidth"/>
-	                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" Path="ActualHeight"/>
-	                </MultiBinding>
-	            </Grid.Visibility>
-	            <Grid.RowDefinitions>
-	                <RowDefinition Height="*"/>
-	                <RowDefinition Height="10"/>
-	                <RowDefinition Height="*"/>
-	            </Grid.RowDefinitions>
-	
-	            <GridSplitter Grid.Row="1" Height="10" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent"/>
-	
-            <!-- Tabs (stacked top) -->
-            <TabControl Grid.Row="0" Background="Transparent" BorderThickness="0">
-                <TabItem Header="Search" DataContext="{Binding SearchViewModel}">
-                    <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="14" Padding="12">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <StackPanel Grid.Row="0" Margin="0,0,0,10">
-                                <DockPanel LastChildFill="True">
-                                    <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                                             Background="{StaticResource InputCyan}"
-                                             MinWidth="220"
-                                             Margin="0,0,8,0"/>
-                                    <Button Content="Add Tag" Margin="0,0,8,0" Command="{Binding AddTagCommand}"/>
-                                </DockPanel>
-                                <ItemsControl ItemsSource="{Binding SuggestedTags}" Margin="0,8,0,0">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Button Content="{Binding DisplayText}"
-                                                    Padding="8,4"
-                                                    Margin="0,0,6,6"
-                                                    Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding Name}"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="1" Margin="0,0,0,10">
-                                <TextBlock Text="Selected tags" Opacity="0.7" Margin="0,0,0,6"/>
-                                <ItemsControl ItemsSource="{Binding SelectedTags}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="{StaticResource InputCyan}" CornerRadius="10" Padding="6,3" Margin="0,0,6,6">
-                                                <DockPanel>
-                                                    <TextBlock Text="{Binding DisplayText}" Margin="0,0,6,0"/>
-                                                    <Button Content="x"
-                                                            Padding="0"
-                                                            Width="18"
-                                                            Height="18"
-                                                            Command="{Binding DataContext.RemoveTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                            CommandParameter="{Binding Name}"/>
-                                                </DockPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="2" Margin="0,0,0,10">
-                                <TextBlock Text="Related tags" Opacity="0.7" Margin="0,0,0,6"/>
-                                <Border Background="{StaticResource PanelBg}"
-                                        BorderBrush="{StaticResource BorderSoft}"
-                                        BorderThickness="1"
-                                        CornerRadius="10"
-                                        Padding="8">
-                                    <Grid>
-                                        <ItemsControl ItemsSource="{Binding RelatedTags}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <WrapPanel/>
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Button Content="{Binding DisplayText}"
-                                                            Padding="8,4"
-                                                            Margin="0,0,6,6"
-                                                            Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                            CommandParameter="{Binding Name}"/>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                        <TextBlock Text="Related tags will appear here." Opacity="0.6">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding RelatedTags.Count}" Value="0">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
                                     </Grid>
-                                </Border>
-                            </StackPanel>
 
-                            <Border Grid.Row="3" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="10" Padding="8">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Found files" Opacity="0.7" Margin="0,0,0,6"/>
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                            <ItemsControl ItemsSource="{Binding Results}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <WrapPanel/>
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Button Padding="10,4"
-                                                                Margin="0,0,6,6"
-                                                                Background="{StaticResource InputCyan}"
-                                                                ToolTip="{Binding Path}"
-                                                                Command="{Binding DataContext.SelectFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                CommandParameter="{Binding}">
-                                                            <Button.Content>
-                                                                <TextBlock TextWrapping="Wrap" Width="240">
-                                                                    <Run Text="{Binding Path, Converter={StaticResource CategoryPathConverter}}"/>
-                                                                    <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
-                                                                </TextBlock>
-                                                            </Button.Content>
-                                                        </Button>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </ScrollViewer>
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Text="Selected files" Opacity="0.7" Margin="0,0,0,6"/>
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <Grid Grid.Column="2">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                                            <TextBlock Text="Selected files" Opacity="0.7" DockPanel.Dock="Left"/>
+                                            <Button Content="Clear"
+                                                    Padding="6,2"
+                                                    Margin="8,0,0,0"
+                                                    Command="{Binding ClearSelectedFilesCommand}"
+                                                    HorizontalAlignment="Right"/>
+                                        </DockPanel>
+                                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                                             <ItemsControl ItemsSource="{Binding SelectedFiles}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
@@ -604,7 +333,7 @@
                                                                     CommandParameter="{Binding}">
                                                                 <Button.Content>
                                                                     <TextBlock TextWrapping="Wrap" Width="240">
-                                                                        <Run Text="{Binding Path, Converter={StaticResource CategoryPathConverter}}"/>
+                                                                        <Run Text="{Binding Path, Converter={StaticResource LibraryPathConverter}}"/>
                                                                         <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
                                                                     </TextBlock>
                                                                 </Button.Content>
@@ -631,7 +360,7 @@
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                         </ScrollViewer>
-                                    </StackPanel>
+                                    </Grid>
                                 </Grid>
                             </Border>
 
@@ -653,7 +382,7 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <TextBlock Text="No files found in Categories." Opacity="0.7">
+                                    <TextBlock Text="No files found in Library." Opacity="0.7">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
@@ -701,8 +430,310 @@
                             </Grid>
                         </Grid>
                     </Border>
-                </TabItem>
-            </TabControl>
+
+            </DockPanel>
+
+            <!-- Prompt -->
+            <controls:PromptPanel Grid.Column="2"/>
+
+
+	        </Grid>
+
+	        <!-- Portrait (stacked) -->
+	        <Grid>
+	            <Grid.Visibility>
+	                <MultiBinding Converter="{StaticResource AspectToVis}">
+	                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" Path="ActualWidth"/>
+	                    <Binding RelativeSource="{RelativeSource AncestorType=Window}" Path="ActualHeight"/>
+	                </MultiBinding>
+	            </Grid.Visibility>
+	            <Grid.RowDefinitions>
+	                <RowDefinition Height="*"/>
+	                <RowDefinition Height="10"/>
+	                <RowDefinition Height="*"/>
+	            </Grid.RowDefinitions>
+	
+	            <GridSplitter Grid.Row="1" Height="10" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent"/>
+	
+            <!-- Search panel (stacked top) -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource PanelBg}"
+                    BorderBrush="{StaticResource BorderSoft}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="12"
+                    DataContext="{Binding SearchViewModel}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                                <DockPanel LastChildFill="True">
+                                    <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                             Background="{StaticResource InputCyan}"
+                                             MinWidth="220"
+                                             Margin="0,0,8,0"/>
+                                    <Button Content="Add Tag" Margin="0,0,8,0" Command="{Binding AddTagCommand}"/>
+                                </DockPanel>
+                                <ItemsControl ItemsSource="{Binding SuggestedTags}" Margin="0,8,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding DisplayText}"
+                                                    Padding="8,4"
+                                                    Margin="0,0,6,6"
+                                                    Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding Name}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Margin="0,0,0,10">
+                                <TextBlock Text="Selected tags" Opacity="0.7" Margin="0,0,0,6"/>
+                                <ItemsControl ItemsSource="{Binding SelectedTags}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{StaticResource InputCyan}" CornerRadius="10" Padding="6,3" Margin="0,0,6,6">
+                                                <DockPanel>
+                                                    <TextBlock Text="{Binding DisplayText}" Margin="0,0,6,0"/>
+                                                    <Button Content="x"
+                                                            Padding="0"
+                                                            Width="18"
+                                                            Height="18"
+                                                            Command="{Binding DataContext.RemoveTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding Name}"/>
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Margin="0,0,0,10">
+                                <TextBlock Text="Related tags" Opacity="0.7" Margin="0,0,0,6"/>
+                                <Border Background="{StaticResource PanelBg}"
+                                        BorderBrush="{StaticResource BorderSoft}"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="8">
+                                    <Grid>
+                                        <ItemsControl ItemsSource="{Binding RelatedTags}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Content="{Binding DisplayText}"
+                                                            Padding="8,4"
+                                                            Margin="0,0,6,6"
+                                                            Command="{Binding DataContext.AddTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding Name}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Text="Related tags will appear here." Opacity="0.6">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding RelatedTags.Count}" Value="0">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <Border Grid.Row="3" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" CornerRadius="10" Padding="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="16"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Grid Grid.Column="0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Text="Found files" Opacity="0.7" Margin="0,0,0,6"/>
+                                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding Results}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Padding="10,4"
+                                                                Margin="0,0,6,6"
+                                                                Background="{StaticResource InputCyan}"
+                                                                ToolTip="{Binding Path}"
+                                                                Command="{Binding DataContext.SelectFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding}">
+                                                            <Button.Content>
+                                                                <TextBlock TextWrapping="Wrap" Width="240">
+                                                                    <Run Text="{Binding Path, Converter={StaticResource LibraryPathConverter}}"/>
+                                                                    <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
+                                                                </TextBlock>
+                                                            </Button.Content>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Grid>
+
+                                    <Grid Grid.Column="2">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                                            <TextBlock Text="Selected files" Opacity="0.7" DockPanel.Dock="Left"/>
+                                            <Button Content="Clear"
+                                                    Padding="6,2"
+                                                    Margin="8,0,0,0"
+                                                    Command="{Binding ClearSelectedFilesCommand}"
+                                                    HorizontalAlignment="Right"/>
+                                        </DockPanel>
+                                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding SelectedFiles}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                            <Button Padding="10,4"
+                                                                    Margin="0,0,8,0"
+                                                                    Background="{StaticResource InputCyan}"
+                                                                    ToolTip="{Binding Path}"
+                                                                    Command="{Binding DataContext.RemoveSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}">
+                                                                <Button.Content>
+                                                                    <TextBlock TextWrapping="Wrap" Width="240">
+                                                                        <Run Text="{Binding Path, Converter={StaticResource LibraryPathConverter}}"/>
+                                                                        <Run Text="{Binding RelevancePercent, StringFormat=' ({0}%)'}"/>
+                                                                    </TextBlock>
+                                                                </Button.Content>
+                                                            </Button>
+                                                            <Button Content="^"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Margin="0,0,4,0"
+                                                                    Command="{Binding DataContext.MoveSelectedFileUpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="v"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Margin="0,0,4,0"
+                                                                    Command="{Binding DataContext.MoveSelectedFileDownCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="x"
+                                                                    Width="24"
+                                                                    Height="24"
+                                                                    Command="{Binding DataContext.RemoveSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Row="4" Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding IndexStatusMessage}" Opacity="0.75">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasIndexStatusMessage}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="No files found in Library." Opacity="0.7">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.EmptyIndex}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="No files match the selected tags." Opacity="0.7">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.NoResults}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource AccentPink}" TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="{x:Static viewModels:SearchState.Error}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource IconBtn}"
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Center"
+                                        ToolTip="Refresh tags"
+                                        Command="{Binding RefreshCommand}">
+                                    <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoRefresh}"/>
+                                </Button>
+                            </Grid>
+                </Grid>
+            </Border>
 
 	            <!-- Prompt (stacked bottom) -->
             <controls:PromptPanel Grid.Row="2"/>
@@ -815,6 +846,9 @@
 
     </Grid>
 </Window>
+
+
+
 
 
 

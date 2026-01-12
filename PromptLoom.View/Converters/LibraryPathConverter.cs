@@ -1,5 +1,6 @@
 // CHANGE LOG
-// - 2026-03-02 | Request: Search file pills | Show path segment after Categories on file pills.
+// - 2026-03-06 | Request: Tag-only mode | Show path segment after Library on file pills.
+
 using System;
 using System.Globalization;
 using System.Windows.Data;
@@ -7,9 +8,9 @@ using System.Windows.Data;
 namespace PromptLoom.Converters;
 
 /// <summary>
-/// Converts a full path into the portion after the Categories folder.
+/// Converts a full path into the portion after the Library folder.
 /// </summary>
-public sealed class CategoryPathConverter : IValueConverter
+public sealed class LibraryPathConverter : IValueConverter
 {
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -18,7 +19,7 @@ public sealed class CategoryPathConverter : IValueConverter
             return value;
 
         var normalized = path.Replace('\\', '/');
-        const string marker = "/Categories/";
+        const string marker = "/Library/";
         var index = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
         if (index < 0)
             return normalized;
