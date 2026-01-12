@@ -1,72 +1,59 @@
-// TEST: Add baseline PromptEngine coverage and view model smoke tests using fakes.
+// CHANGE LOG
+// - 2026-03-09 | Fix: Categories path | Update test file paths to AppData Categories layout.
+// - 2026-03-09 | Request: Indexing progress | Update fake tag indexer to match progress-aware interface.
+// - 2026-03-09 | Request: Tag-only mode | Replace category prompt tests with tag prompt builder coverage.
+// - 2026-03-09 | Request: Tag-only mode | Update MainViewModel smoke tests to use tag selection flow.
+// - 2025-12-25 | Test: Prompt generation baseline | Add baseline prompt engine coverage and view model smoke tests.
 
 using System;
-using System.IO;
-using PromptLoom.Models;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using PromptLoom.Services;
 using PromptLoom.Tests.Fakes;
 using PromptLoom.ViewModels;
+using Xunit;
 
 namespace PromptLoom.Tests;
 
 /// <summary>
-/// Unit tests for core prompt generation logic.
+/// Unit tests for tag prompt generation logic.
 /// </summary>
-public class UnitTest1
+public class TagPromptBuilderTests
 {
     /// <summary>
-    /// Generates a prompt from a single category/subcategory/entry and validates prefix/suffix ordering.
+    /// Generates a prompt from selected tag files and validates normalization.
     /// </summary>
     [Fact]
-    public void Generate_PromptFromSingleEntry_PreservesAffixOrder()
+    public void Generate_PromptFromSelectedFiles_NormalizesEntries()
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), "PromptLoomTests_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        var filePath = Path.Combine(tempDir, "entry.txt");
-        File.WriteAllText(filePath, "sparkle");
-
-        try
+        var fileReader = new FakeWildcardFileReader(new Dictionary<string, List<string>>
         {
-            var entry = new PromptEntryModel("entry.txt", filePath)
-            {
-                Enabled = true,
-                Order = 0
-            };
-            var sub = new SubCategoryModel("Sub", tempDir)
-            {
-                Enabled = true,
-                Prefix = "sub-pre",
-                Suffix = "sub-suf",
-                UseAllTxtFiles = false
-            };
-            sub.Entries.Add(entry);
-            sub.SelectedEntry = entry;
+            ["a.txt"] = new() { "  hello\r\nworld  " },
+            ["b.txt"] = new() { "sparkle" }
+        });
+        var builder = new TagPromptBuilder(fileReader, new FixedRandomSource());
 
-            var cat = new CategoryModel("Cat", tempDir)
-            {
-                Enabled = true,
-                Prefix = "cat-pre",
-                Suffix = "cat-suf",
-                Order = 0
-            };
-            cat.SubCategories.Add(sub);
+        var result = builder.Generate(new[] { "a.txt", "b.txt" }, seed: 123);
 
-            var engine = new PromptEngine();
-            var result = engine.Generate(new[] { cat }, seed: 123);
+        Assert.Equal("hello world\nsparkle", result.Prompt);
+        Assert.Empty(result.Messages);
+    }
 
-            Assert.Equal("cat-pre sub-pre sparkle sub-suf cat-suf", result.Prompt);
-        }
-        finally
+    [Fact]
+    public void Generate_EmptyFiles_ReportMessages()
+    {
+        var fileReader = new FakeWildcardFileReader(new Dictionary<string, List<string>>
         {
-            try
-            {
-                Directory.Delete(tempDir, recursive: true);
-            }
-            catch
-            {
-                // Best-effort cleanup; test output is deterministic regardless.
-            }
-        }
+            ["empty.txt"] = new()
+        });
+        var builder = new TagPromptBuilder(fileReader, new FixedRandomSource());
+
+        var result = builder.Generate(new[] { "empty.txt" }, seed: null);
+
+        Assert.Equal(string.Empty, result.Prompt);
+        Assert.Contains(result.Messages, message => message.Contains("has no entries", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Messages, message => message.Contains("Prompt is empty", StringComparison.OrdinalIgnoreCase));
     }
 }
 
@@ -77,7 +64,12 @@ public class MainViewModelSmokeTests
     {
         var clipboard = new FakeClipboardService();
         var dispatcher = new ImmediateDispatcherService();
+        var fileSystem = new FakeFileSystem();
+        var appDataStore = new FakeAppDataStore("C:\\Temp\\PromptLoomTests");
         var vm = new MainViewModel(
+            fileSystem: fileSystem,
+            appDataStore: appDataStore,
+            searchViewModel: BuildSearchViewModel(),
             clipboard: clipboard,
             dispatcher: dispatcher);
 
@@ -93,7 +85,12 @@ public class MainViewModelSmokeTests
     {
         var process = new FakeProcessService();
         var dispatcher = new ImmediateDispatcherService();
+        var fileSystem = new FakeFileSystem();
+        var appDataStore = new FakeAppDataStore("C:\\Temp\\PromptLoomTests");
         var vm = new MainViewModel(
+            fileSystem: fileSystem,
+            appDataStore: appDataStore,
+            searchViewModel: BuildSearchViewModel(),
             process: process,
             dispatcher: dispatcher);
 
@@ -108,10 +105,86 @@ public class MainViewModelSmokeTests
     public void QueueRecomputePrompt_UsesDispatcher()
     {
         var dispatcher = new ImmediateDispatcherService();
-        var vm = new MainViewModel(dispatcher: dispatcher);
+        var fileSystem = new FakeFileSystem();
+        var appDataStore = new FakeAppDataStore("C:\\Temp\\PromptLoomTests");
+        var fileReader = new FakeWildcardFileReader(new Dictionary<string, List<string>>
+        {
+            ["C:\\Temp\\PromptLoomTests\\Categories\\Body\\Head.txt"] = new() { "seed" }
+        });
+        var vm = new MainViewModel(
+            fileSystem: fileSystem,
+            appDataStore: appDataStore,
+            fileReader: fileReader,
+            dispatcher: dispatcher,
+            searchViewModel: BuildSearchViewModel());
 
-        vm.QueueRecomputePrompt(immediate: true);
+        vm.SearchViewModel.SelectedFiles.Add(new TagFileInfo("C:\\Temp\\PromptLoomTests\\Categories\\Body\\Head.txt", "Head.txt", 1));
 
-        Assert.NotNull(vm.PromptText);
+        Assert.Equal("seed", vm.PromptText);
     }
+
+    private static SearchViewModel BuildSearchViewModel()
+    {
+        var tagIndexer = new FakeTagIndexer();
+        var tagSearchService = new FakeTagSearchService();
+        return new SearchViewModel(tagIndexer, tagSearchService, new FakeErrorReporter());
+    }
+}
+
+internal sealed class FakeWildcardFileReader : IWildcardFileReader
+{
+    private readonly Dictionary<string, List<string>> _entries;
+
+    public FakeWildcardFileReader(Dictionary<string, List<string>> entries)
+    {
+        _entries = entries;
+    }
+
+    public List<string> LoadWildcardFile(string path)
+        => _entries.TryGetValue(path, out var entries) ? entries : new List<string>();
+}
+
+internal sealed class FixedRandomSource : IRandomSource
+{
+    public Random Create(int? seed) => new FixedRandom();
+}
+
+internal sealed class FixedRandom : Random
+{
+    public override int Next(int maxValue) => 0;
+}
+
+internal sealed class FakeTagIndexer : ITagIndexer
+{
+    public Task<TagIndexSyncResult> SyncAsync(CancellationToken ct = default, IProgress<TagIndexProgress>? progress = null)
+        => Task.FromResult(new TagIndexSyncResult());
+}
+
+internal sealed class FakeTagSearchService : ITagSearchService
+{
+    public Task<IReadOnlyList<string>> SuggestTagsAsync(string query, int limit, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+
+    public Task<IReadOnlyList<TagFileInfo>> SearchFilesAsync(IReadOnlyCollection<string> tags, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<TagFileInfo>>(Array.Empty<TagFileInfo>());
+
+    public Task<IReadOnlyDictionary<string, int>> CountTagReferencesAsync(
+        IReadOnlyCollection<string> tags,
+        IReadOnlyCollection<string> filePaths,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<string, int>>(new Dictionary<string, int>());
+
+    public Task<IReadOnlyDictionary<string, int>> CountTagReferencesAllFilesAsync(
+        IReadOnlyCollection<string> tags,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<string, int>>(new Dictionary<string, int>());
+
+    public Task<IReadOnlyList<TagRelatedInfo>> GetRelatedTagsAsync(
+        IReadOnlyCollection<string> selectedTags,
+        IReadOnlyCollection<string> filePaths,
+        int limit,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<TagRelatedInfo>>(Array.Empty<TagRelatedInfo>());
+
+    public string NormalizeTag(string tag) => tag.Trim().ToLowerInvariant();
 }

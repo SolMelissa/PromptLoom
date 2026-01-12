@@ -1,4 +1,5 @@
 <!-- CHANGE LOG
+- 2026-03-09 | Request: Tag-only docs | Replace category references with tag + library guidance.
 - 2026-01-02 | Request: Sync app version | Update README version header to 2.1.2.
 -->
 # PromptLoom 2.1.2 (Windows 11)
@@ -6,11 +7,10 @@
 WPF (.NET 8) prompt builder driven by ComfyUI-style wildcard `.txt` files arranged in folders.
 
 ## Highlights
-- Categories are draggable **cards** (order replaces priority sliders).
-- Categories start **unchecked/collapsed**. Expands only when enabled.
-- **Multiple subcategories per category**: check any number to include them.
-- Middle pane edits a subcategory (click its name from the category card).
-- Cleaner spacing around prefixes/suffixes.
+- Tags drive prompt building from wildcard files arranged in folders.
+- Select any number of tag-matched files to build multi-line prompts.
+- Tag search suggests related terms and shows match counts.
+- Prompt order follows the selected file ordering.
 - Pastel theme: cyan inputs + pastel pink prompt area.
 
 ## Run
@@ -24,8 +24,4 @@ Convenience scripts (from the project folder):
 - `run.cmd`
 
 ## Folder layout
-`Categories/<Category>/<Subcategory>/*.txt` (one entry per line)
-
-Metadata:
-- `Categories/<Category>/_category.json`
-- `Categories/<Category>/<Subcategory>/_subcategory.json`
+`Library/<TagPath>/*.txt` (one entry per line)

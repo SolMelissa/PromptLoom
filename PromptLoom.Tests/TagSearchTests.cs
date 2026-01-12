@@ -1,9 +1,8 @@
 // CHANGE LOG
+// - 2026-03-09 | Fix: Categories path | Update test setup to use Categories storage layout.
+// - 2026-03-09 | Request: Tag-only mode | Build tag search tests on library paths instead of categories.
+// - 2026-01-07 | Fix: Lemmatizer injection | Provide XLemmatizer instance in TagTokenizer tests.
 // - 2026-01-05 | Fix: Tag count test setup | Create the second directory before writing the test file.
-// - 2026-01-02 | Request: Global tag counts | Validate tag counts across all files.
-// - 2026-01-02 | Request: Related tag scoring | Verify weighted relevance percentages.
-// - 2026-01-02 | Request: Tag match counts | Validate match counts in search results.
-// - 2026-01-02 | Request: Content tag indexing test | Assert content-only tags are indexed.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using PromptLoom.Services;
 using PromptLoom.Tests.Fakes;
+using XLemmatizer;
 using Xunit;
 
 namespace PromptLoom.Tests;
@@ -21,7 +21,7 @@ public sealed class TagSearchTests
     [Fact]
     public void TagTokenizer_TracksCountsAndSkipsStopWords()
     {
-        var tokenizer = new TagTokenizer();
+        var tokenizer = new TagTokenizer(new Lemmatizer());
         var stopWords = new HashSet<string>(StringComparer.Ordinal) { "and" };
         var segments = new[] { "Body", "Head and Shoulders", "Old Brunette", "Head" };
 
@@ -39,8 +39,8 @@ public sealed class TagSearchTests
     public async Task TagIndexer_SyncsAddsAndRemovesEntries()
     {
         var rootDir = Path.Combine(AppContext.BaseDirectory, "TagIndexTests", Guid.NewGuid().ToString("N"));
-        var categoriesDir = Path.Combine(rootDir, "Categories");
-        var filePath = Path.Combine(categoriesDir, "Body", "Head and Shoulders", "Old Brunette.txt");
+        var libraryDir = Path.Combine(rootDir, "Categories");
+        var filePath = Path.Combine(libraryDir, "Body", "Head and Shoulders", "Old Brunette.txt");
 
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         File.WriteAllText(filePath, "old old seed");
@@ -51,7 +51,7 @@ public sealed class TagSearchTests
             var appDataStore = new FakeAppDataStore(rootDir);
             var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
             var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
-            var tokenizer = new TagTokenizer();
+            var tokenizer = new TagTokenizer(new Lemmatizer());
             var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
 
             var result = await tagIndexer.SyncAsync();
@@ -82,8 +82,8 @@ public sealed class TagSearchTests
     public async Task TagSearchService_UsesAndMatchingAndFts()
     {
         var rootDir = Path.Combine(AppContext.BaseDirectory, "TagSearchTests", Guid.NewGuid().ToString("N"));
-        var categoriesDir = Path.Combine(rootDir, "Categories");
-        var filePath = Path.Combine(categoriesDir, "Body", "Head and Shoulders", "Old Brunette.txt");
+        var libraryDir = Path.Combine(rootDir, "Categories");
+        var filePath = Path.Combine(libraryDir, "Body", "Head and Shoulders", "Old Brunette.txt");
 
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         File.WriteAllText(filePath, "seed seed");
@@ -94,7 +94,7 @@ public sealed class TagSearchTests
             var appDataStore = new FakeAppDataStore(rootDir);
             var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
             var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
-            var tokenizer = new TagTokenizer();
+            var tokenizer = new TagTokenizer(new Lemmatizer());
             var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
             var searchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
 
@@ -123,12 +123,51 @@ public sealed class TagSearchTests
     }
 
     [Fact]
+    public async Task TagSearchService_NormalizesInputTags()
+    {
+        var rootDir = Path.Combine(AppContext.BaseDirectory, "TagNormalizationTests", Guid.NewGuid().ToString("N"));
+        var libraryDir = Path.Combine(rootDir, "Categories");
+        var filePath = Path.Combine(libraryDir, "Run", "Fast.txt");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        File.WriteAllText(filePath, "running running");
+
+        try
+        {
+            var fileSystem = new FileSystem();
+            var appDataStore = new FakeAppDataStore(rootDir);
+            var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
+            var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
+            var tokenizer = new TagTokenizer(new Lemmatizer());
+            var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
+            var searchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
+
+            await tagIndexer.SyncAsync();
+
+            var normalizedRunning = searchService.NormalizeTag("running");
+            Assert.Equal(normalizedRunning, searchService.NormalizeTag("Running"));
+            Assert.Equal(normalizedRunning, searchService.NormalizeTag("  RUNNING  "));
+
+            var lowerMatches = await searchService.SearchFilesAsync(new[] { "running" });
+            var upperMatches = await searchService.SearchFilesAsync(new[] { "RUNNING" });
+
+            Assert.Single(lowerMatches);
+            Assert.Single(upperMatches);
+            Assert.Equal(lowerMatches[0].Path, upperMatches[0].Path);
+        }
+        finally
+        {
+            CleanupRoot(rootDir);
+        }
+    }
+
+    [Fact]
     public async Task TagSearchService_ComputesRelatedTagsWithWeights()
     {
         var rootDir = Path.Combine(AppContext.BaseDirectory, "TagRelatedTests", Guid.NewGuid().ToString("N"));
-        var categoriesDir = Path.Combine(rootDir, "Categories");
-        var filePathA = Path.Combine(categoriesDir, "Body", "Head", "Old Brunette.txt");
-        var filePathB = Path.Combine(categoriesDir, "Body", "Head", "Blonde.txt");
+        var libraryDir = Path.Combine(rootDir, "Categories");
+        var filePathA = Path.Combine(libraryDir, "Body", "Head", "Old Brunette.txt");
+        var filePathB = Path.Combine(libraryDir, "Body", "Head", "Blonde.txt");
 
         Directory.CreateDirectory(Path.GetDirectoryName(filePathA)!);
         File.WriteAllText(filePathA, "ocean");
@@ -140,7 +179,7 @@ public sealed class TagSearchTests
             var appDataStore = new FakeAppDataStore(rootDir);
             var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
             var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
-            var tokenizer = new TagTokenizer();
+            var tokenizer = new TagTokenizer(new Lemmatizer());
             var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
             var searchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
 
@@ -170,9 +209,9 @@ public sealed class TagSearchTests
     public async Task TagSearchService_CountsTagsAcrossAllFiles()
     {
         var rootDir = Path.Combine(AppContext.BaseDirectory, "TagCountsTests", Guid.NewGuid().ToString("N"));
-        var categoriesDir = Path.Combine(rootDir, "Categories");
-        var filePathA = Path.Combine(categoriesDir, "Body", "Head", "Old.txt");
-        var filePathB = Path.Combine(categoriesDir, "Body", "Leg", "Old.txt");
+        var libraryDir = Path.Combine(rootDir, "Categories");
+        var filePathA = Path.Combine(libraryDir, "Body", "Head", "Old.txt");
+        var filePathB = Path.Combine(libraryDir, "Body", "Leg", "Old.txt");
 
         Directory.CreateDirectory(Path.GetDirectoryName(filePathA)!);
         Directory.CreateDirectory(Path.GetDirectoryName(filePathB)!);
@@ -185,7 +224,7 @@ public sealed class TagSearchTests
             var appDataStore = new FakeAppDataStore(rootDir);
             var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
             var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
-            var tokenizer = new TagTokenizer();
+            var tokenizer = new TagTokenizer(new Lemmatizer());
             var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
             var searchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
 
@@ -206,8 +245,8 @@ public sealed class TagSearchTests
     public async Task TagIndexer_ReadsFileContentsForAdditionalTags()
     {
         var rootDir = Path.Combine(AppContext.BaseDirectory, "TagContentTests", Guid.NewGuid().ToString("N"));
-        var categoriesDir = Path.Combine(rootDir, "Categories");
-        var filePath = Path.Combine(categoriesDir, "Body", "Head", "Plain.txt");
+        var libraryDir = Path.Combine(rootDir, "Categories");
+        var filePath = Path.Combine(libraryDir, "Body", "Head", "Plain.txt");
 
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         File.WriteAllText(filePath, "zebra zebra");
@@ -218,7 +257,7 @@ public sealed class TagSearchTests
             var appDataStore = new FakeAppDataStore(rootDir);
             var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
             var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
-            var tokenizer = new TagTokenizer();
+            var tokenizer = new TagTokenizer(new Lemmatizer());
             var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
 
             await tagIndexer.SyncAsync();
@@ -236,8 +275,8 @@ public sealed class TagSearchTests
     public async Task TagIndexer_ForcesReindexWhenIndexVersionChanges()
     {
         var rootDir = Path.Combine(AppContext.BaseDirectory, "TagReindexTests", Guid.NewGuid().ToString("N"));
-        var categoriesDir = Path.Combine(rootDir, "Categories");
-        var filePath = Path.Combine(categoriesDir, "Body", "Head", "Plain.txt");
+        var libraryDir = Path.Combine(rootDir, "Categories");
+        var filePath = Path.Combine(libraryDir, "Body", "Head", "Plain.txt");
 
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         File.WriteAllText(filePath, "zebra");
@@ -248,7 +287,7 @@ public sealed class TagSearchTests
             var appDataStore = new FakeAppDataStore(rootDir);
             var tagIndexStore = new TagIndexStore(fileSystem, appDataStore);
             var stopWordsStore = new StopWordsStore(fileSystem, appDataStore);
-            var tokenizer = new TagTokenizer();
+            var tokenizer = new TagTokenizer(new Lemmatizer());
             var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, appDataStore, fileSystem, new SystemClock());
 
             await tagIndexer.SyncAsync();

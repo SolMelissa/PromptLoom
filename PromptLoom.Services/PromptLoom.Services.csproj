@@ -1,8 +1,8 @@
 <!--
 CHANGE LOG
+- 2026-03-06 | Request: Lemmatization | Add XLemmatizer package reference.
 - 2026-01-02 | Fix: Tag search build | Add SQLite packages for Services tag index usage.
 - 2025-12-31 | Fix: Exclude nested bin/obj | Prevent SwarmUi.Client generated files from compiling in Services.
-- 2025-12-31 | Request: MVVM split | Rename Infrastructure project to Services and host shared services + SwarmUi client.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -24,5 +24,6 @@ CHANGE LOG
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.6" />
+    <PackageReference Include="XLemmatizer" Version="0.1.0" />
   </ItemGroup>
 </Project>

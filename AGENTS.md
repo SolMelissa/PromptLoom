@@ -38,6 +38,7 @@ INDEX
 7.1 Branch Structure  
 7.2 Pull Request Targets  
 7.3 Merge Authority  
+7.4 PR Creation
 
 8. Build, Test, and Validation Requirements  
 8.1 Mandatory Build and Test Execution  
@@ -143,10 +144,13 @@ All PRs target dev. If dev does not exist, the agent shall pause and request gui
 7.3 Merge Authority  
 Agents shall never merge PRs under any circumstance.
 
+7.4 PR Creation
+Agent shall provide commands to user to generate and push a PR. Agents shall not push PRs themselves.
+
 8. BUILD, TEST, AND VALIDATION REQUIREMENTS
 
 8.1 Mandatory Build and Test Execution  
-Before PR submission, agents shall run a full build and run tests where available.
+Before PR submission, agents shall run a full build and ask user to run tests. Agent is not authorized to run dotnet test.
 
 8.2 Handling Pre-Existing Failures  
 If failures are trivial, agents shall fix them. If not, agents shall proceed and escalate before submission.

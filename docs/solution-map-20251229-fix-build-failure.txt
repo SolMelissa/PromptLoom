@@ -1,4 +1,5 @@
 CHANGE LOG
+- 2026-03-09 | Request: Tag-only docs | Replace category folder references with library.
 - 2025-12-31 | Request: MVVM split | Refreshed solution map to View/Model/ViewModel/Services layout and SwarmUi.Client relocation.
 - 2025-12-29 | Request: solution map reference files | Added generated reference map.
 Solution: PromptLoom.sln
@@ -15,7 +16,7 @@ Solution: PromptLoom.sln
     File: run.bat
     File: run.cmd
     File: run.ps1
-    Folder: Categories
+    Folder: Library
     Folder: docs
     Folder: External
     Folder: scripts
@@ -48,8 +49,6 @@ Solution: PromptLoom.sln
       File: AssemblyInfo.cs
   Project: PromptLoom.Model (PromptLoom.Model\PromptLoom.Model.csproj)
     Folder: PromptLoom.Model\Models
-      File: CategoryModels.cs
-      File: Meta.cs
   Project: PromptLoom.Services (PromptLoom.Services\PromptLoom.Services.csproj)
     Folder: PromptLoom.Services
       File: AppDataStore.cs

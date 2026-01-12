@@ -1,45 +1,19 @@
 // CHANGE LOG
-// - 2026-03-05 | Request: Tag selection provider | Use selected files to drive prompt generation.
-// - 2026-03-05 | Request: Remove view-only bindings | Drop selection/preview and file editor wiring.
-// - 2026-03-02 | Request: Batch qty slider | Clamp batch quantity to 2-50.
-// FIX: Introduce UI side-effect wrappers for MessageBox/Clipboard/Process/Dispatcher to improve testability.
-// CAUSE: Direct static UI calls in the view model required WPF runtime in tests.
-// CHANGE: Inject UI service wrappers and use them for side effects. 2025-12-25
-// FIX: build warning CS1998 (async method without await) in SendToSwarmUi | CAUSE: async void wrapper without awaits
-// CHANGE: make SendToSwarmUi synchronous and keep fire-and-forget generation | DATE: 2025-12-25
-// FIX: Allow core dependencies (file/time/random) to be injected for tests.
-// CAUSE: MainViewModel hard-coded static services and Random.Shared, making deterministic tests difficult.
-// CHANGE: Add injectable IWildcardFileReader, IClock, and IRandomSource. 2025-12-25
-// FIX: build warning CS1998 (async method without await) in Copy | CAUSE: async void with no awaited work
-// CHANGE: make Copy synchronous and remove dummy await | DATE: 2025-12-25
-// FIX: runtime crash "Parameter count mismatch" when recomputing prompt via Dispatcher.Invoke | CAUSE: RecomputePrompt has optional parameter and was invoked as a delegate with no args
-// CHANGE: invoke RecomputePrompt through a parameterless lambda | DATE: 2025-12-25
-// FIX: build error CS0103 (AutoSave missing) when randomizing categories/subcategories | CAUSE: refactor removed helper used in event handlers
-// CHANGE: reintroduce AutoSave helper to funnel into debounced queue | DATE: 2026-03-02
-// FIX: build error CS1039 (Unterminated string literal) in TestSwarmConnection | CAUSE: multiline interpolated string split across lines
-// CHANGE: keep the string on one source line using \n escape | DATE: 2025-12-22
-// FIX: build error CS0103 (missing TryParseSwarmWsFrame symbol) | CAUSE: parser helper exists as SwarmWsParser.TryParseSwarmWsFrame but was called unqualified
-// CHANGE: call SwarmWsParser.TryParseSwarmWsFrame explicitly | DATE: 2025-12-22
-// FIX: UX regression (Send-to-SwarmUI button text changed / implied single-flight) | CAUSE: SendToSwarmUi mutated SwarmButtonText and ran a "Sent!" timer
-// CHANGE: keep button text stable; allow multiple overlapping sends and track status per-thumbnail | DATE: 2025-12-22
-// FIX: build errors for missing injected services in MainViewModel | CAUSE: fields/ctor wiring removed during service seams refactor
-// CHANGE: reintroduce IFileSystem/IAppDataStore/IUserSettingsStore/ISwarmUiClientFactory wiring and use IErrorReporter. 2025-12-26
+// - 2026-03-09 | Fix: Cleanup | Remove unused JSON import after tag-only refactor.
+// - 2026-03-06 | Request: Tag-only mode | Remove category workflows and generate prompts from tag-selected files.
+// - 2026-03-06 | Request: Clear startup prompt | Gate prompt recompute until user interaction.
 
 // NOTE (PromptLoom 1.8.0.1):
 // SwarmUI integration: added a SwarmUI bridge reference and a "Send Prompt to SwarmUI" button/command.
 // IMPORTANT: PromptLoom intentionally does NOT send model/resolution/steps/sampler so SwarmUI's current UI settings remain authoritative.
 //
-// NOTE (PromptLoom 1.7.0):
-// Adds file-level selection (PromptEntryModel) under each subcategory and a simple in-app editor for the selected .txt file.
-// Fixes the design mismatch where multiple files were implicitly merged into a single subcategory pool in the UI.
-
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -51,18 +25,15 @@ using System.Windows.Media.Imaging;
 using System.Collections.Generic;
 using System.Text;
 using System.Globalization;
-using PromptLoom.Models;
 using PromptLoom.Services;
 using SwarmUi.Client;
+using XLemmatizer;
 
 namespace PromptLoom.ViewModels;
 
 public sealed class MainViewModel : INotifyPropertyChanged
 {
-    private readonly string _installDir;
-    private readonly SchemaService _schema;
-    private readonly PromptEngine _engine;
-    private readonly PromptGenerationService _promptGeneration;
+    private readonly TagPromptBuilder _promptBuilder;
     private readonly IWildcardFileReader _fileReader;
     private readonly IClock _clock;
     private readonly IRandomSource _randomSource;
@@ -77,6 +48,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IAppSwarmUiService _swarmService;
 
     private readonly IErrorReporter _errors;
+    private bool _suppressPromptRecompute;
+    private bool _promptEnabled;
 
     // Reuse a single HttpClient instance for image downloads.
     private static readonly HttpClient s_http = new HttpClient();
@@ -84,17 +57,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<string> ErrorEntries => _errors.Entries;
     public SearchViewModel SearchViewModel { get; }
 
-    // Bulk updates (All/None) must not trigger mid-loop prompt recomputes.
-    private int _bulkUpdateDepth;
-
     // Debounce prompt recomputation to avoid rebuilding several times per UI gesture.
     private CancellationTokenSource? _recomputeCts;
     private readonly TimeSpan _recomputeDebounce = TimeSpan.FromMilliseconds(90);
 
     private CancellationTokenSource? _autoSaveCts;
     private readonly TimeSpan _autoSaveDebounce = TimeSpan.FromMilliseconds(800);
-
-    public ObservableCollection<CategoryModel> Categories { get; } = new();
 
     private string _copyButtonText = "Copy";
     public string CopyButtonText
@@ -304,8 +272,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         get => _promptSeedText;
         set
         {
+            if (string.Equals(_promptSeedText, value, StringComparison.Ordinal))
+                return;
+
             _promptSeedText = value;
             OnPropertyChanged();
+            EnablePromptGeneration();
             RecomputePrompt();
         }
     }
@@ -328,8 +300,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string _systemMessages = "";
     public string SystemMessages { get => _systemMessages; set { _systemMessages = value; OnPropertyChanged(); } }
 
-    public RelayCommand ReloadCommand { get; }
-    public RelayCommand SaveCommand { get; }
     public RelayCommand CopyCommand { get; }
     public RelayCommand SendToSwarmUiCommand { get; }
     public RelayCommand SendBatchToSwarmUiCommand { get; }
@@ -345,7 +315,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand OpenSwarmUiCommand { get; }
     public RelayCommand SaveOutputCommand { get; }
     public RelayCommand OpenFolderCommand { get; }
-    public RelayCommand RestoreOriginalCategoriesCommand { get; }
 
     /// <summary>
     /// Window-driven initialization entrypoint.
@@ -354,7 +323,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public void Initialize()
     {
-        Reload();
+        _suppressPromptRecompute = true;
+        PromptText = "";
+        SystemMessages = "";
+        _suppressPromptRecompute = false;
         _ = SearchViewModel.InitializeAsync();
 
         // Load Swarm server metadata on startup (best effort).
@@ -376,7 +348,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         IWildcardFileReader? fileReader = null,
         IClock? clock = null,
         IRandomSource? randomSource = null,
-        PromptEngine? engine = null,
         IUiDialogService? uiDialog = null,
         IClipboardService? clipboard = null,
         IProcessService? process = null,
@@ -395,30 +366,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _clock = clock ?? new SystemClock();
         _randomSource = randomSource ?? new SystemRandomSource();
         _random = _randomSource.Create(null);
-        _engine = engine ?? new PromptEngine(_fileReader, _randomSource);
+        _promptBuilder = new TagPromptBuilder(_fileReader, _randomSource);
         _uiDialog = uiDialog ?? new UiDialogService();
         _clipboard = clipboard ?? new ClipboardService();
         _process = process ?? new ProcessService();
         _dispatcher = dispatcher ?? new DispatcherService();
 
-        _installDir = FindInstallDir();
-        _errors.Info("Resolved InstallDir: " + _installDir);
-
-        // Persist Categories + Outputs across versions.
-        _appDataStore.EnsureInitialized(_installDir, _errors);
+        _appDataStore.EnsureInitialized(AppContext.BaseDirectory, _errors);
         var root = _appDataStore.RootDir;
         _errors.Info("Using AppData RootDir: " + root);
 
-        _schema = new SchemaService(root);
-        _errors.Info("SchemaService created. CategoriesDir=" + _schema.CategoriesDir);
-
         SearchViewModel = searchViewModel ?? BuildSearchViewModel();
-        _promptGeneration = new PromptGenerationService(
-            _engine,
-            new SelectedFilesSelectionProvider(Categories, SearchViewModel.SelectedFiles));
+        SearchViewModel.SelectedFiles.CollectionChanged += OnSelectedFilesChanged;
 
-        ReloadCommand = new RelayCommand("Reload", _ => Reload(), errorReporter: _errors);
-        SaveCommand = new RelayCommand("Save", _ => Save(), errorReporter: _errors);
         CopyCommand = new RelayCommand("Copy", _ => Copy(), errorReporter: _errors);
         SendToSwarmUiCommand = new RelayCommand("SendToSwarmUi", _ => SendToSwarmUi(), errorReporter: _errors);
         SendBatchToSwarmUiCommand = new RelayCommand("SendBatchToSwarmUi", _ => SendBatchToSwarmUi(), errorReporter: _errors);
@@ -434,7 +394,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OpenSwarmUiCommand = new RelayCommand("OpenSwarmUi", _ => OpenSwarmUi(), errorReporter: _errors);
         SaveOutputCommand = new RelayCommand("SaveOutput", _ => SaveOutput(), errorReporter: _errors);
         OpenFolderCommand = new RelayCommand("OpenFolder", _ => OpenFolder(), errorReporter: _errors);
-        RestoreOriginalCategoriesCommand = new RelayCommand("RestoreOriginalCategories", _ => RestoreOriginalCategories(), errorReporter: _errors);
 
         _errors.Info("MainViewModel ctor end");
 
@@ -445,325 +404,48 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         var tagIndexStore = new TagIndexStore(_fileSystem, _appDataStore);
         var stopWordsStore = new StopWordsStore(_fileSystem, _appDataStore);
-        var tokenizer = new TagTokenizer();
+        var lemmatizer = new Lemmatizer();
+        var tokenizer = new TagTokenizer(lemmatizer);
         var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, _appDataStore, _fileSystem, _clock);
         var tagSearchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
 
         return new SearchViewModel(tagIndexer, tagSearchService, _errors);
     }
 
-    private void RandomizeCategoryOnce(object? param)
+
+
+
+
+    private void EnablePromptGeneration()
     {
-        if (param is not CategoryModel cat) return;
-
-        // Preserve current prompt state by locking everything except the target category.
-        var originalCatLocks = Categories.ToDictionary(c => c, c => c.IsLocked);
-        var originalSubLocks = Categories.SelectMany(c => c.SubCategories).ToDictionary(s => s, s => s.IsLocked);
-
-        try
-        {
-            foreach (var c in Categories)
-            {
-                if (!ReferenceEquals(c, cat))
-                    c.IsLocked = true;
-                foreach (var s in c.SubCategories)
-                    s.IsLocked = true;
-            }
-
-            cat.IsLocked = false;
-            foreach (var s in cat.SubCategories)
-            {
-                // respect per-sub locks; if the user locked a subcategory, keep it fixed even when rolling the category.
-                s.IsLocked = originalSubLocks.TryGetValue(s, out var locked) && locked;
-                if (!s.IsLocked) s.CurrentEntry = "";
-            }
-
-            RecomputePrompt(seedOverride: _random.Next(0, int.MaxValue));
-            AutoSave();
-        }
-        finally
-        {
-            foreach (var kv in originalCatLocks) kv.Key.IsLocked = kv.Value;
-            foreach (var kv in originalSubLocks) kv.Key.IsLocked = kv.Value;
-        }
-    }
-
-    private void RandomizeSubCategoryOnce(object? param)
-    {
-        if (param is not SubCategoryModel sub) return;
-
-        var originalCatLocks = Categories.ToDictionary(c => c, c => c.IsLocked);
-        var originalSubLocks = Categories.SelectMany(c => c.SubCategories).ToDictionary(s => s, s => s.IsLocked);
-
-        try
-        {
-            foreach (var c in Categories)
-            {
-                c.IsLocked = true;
-                foreach (var s in c.SubCategories)
-                    s.IsLocked = true;
-            }
-
-            sub.IsLocked = false;
-            sub.CurrentEntry = "";
-
-            RecomputePrompt(seedOverride: _random.Next(0, int.MaxValue));
-            AutoSave();
-        }
-        finally
-        {
-            foreach (var kv in originalCatLocks) kv.Key.IsLocked = kv.Value;
-            foreach (var kv in originalSubLocks) kv.Key.IsLocked = kv.Value;
-        }
-    }
-
-    /// <summary>
-    /// Finds the most likely app root folder containing the Categories directory.
-    /// This helps when running under dotnet run where BaseDirectory points at bin/Debug.
-    /// </summary>
-    private string FindInstallDir()
-    {
-        var current = AppContext.BaseDirectory;
-        for (var i = 0; i < 6; i++)
-        {
-            // Strong signals we are at the app root.
-            // When running from an extracted release zip, Categories lives next to the exe.
-            // When running under dotnet run, Categories lives at the project root and we need to walk upward.
-            var csproj = Path.Combine(current, "PromptLoom.View.csproj");
-            if (_fileSystem.FileExists(csproj))
-            {
-                var categoriesAtProject = Path.Combine(current, "Categories");
-                if (_fileSystem.DirectoryExists(categoriesAtProject))
-                    return current;
-            }
-
-            var categoriesDir = Path.Combine(current, "Categories");
-            if (_fileSystem.DirectoryExists(categoriesDir))
-            {
-                // Heuristic: if Categories has any content (folders/files) OR any _category.json,
-                // we assume this is the right root.
-                try
-                {
-                    if (_fileSystem.EnumerateFileSystemEntries(categoriesDir).Any())
-                        return current;
-
-                    if (_fileSystem.EnumerateFiles(categoriesDir, "_category.json", SearchOption.AllDirectories).Any())
-                        return current;
-                }
-                catch
-                {
-                    // ignore and keep searching up
-                }
-            }
-
-            var categoriesZip = Path.Combine(current, "Categories.zip");
-            if (_fileSystem.FileExists(categoriesZip))
-                return current;
-
-            var parent = Directory.GetParent(current);
-            if (parent is null) break;
-            current = parent.FullName;
-        }
-
-        return AppContext.BaseDirectory;
-    }
-
-    private void Reload()
-    {
-        try
-        {
-            _errors.Info("Reload begin");
-            // Load from disk first.
-            var loaded = _schema.Load();
-            _errors.Info($"Schema loaded: {loaded.Count} categories");
-
-            // Apply to UI-bound collections on the UI thread.
-            _dispatcher.Invoke(() =>
-            {
-                BulkUpdate(() =>
-                {
-                    // Detach old event hooks before we clear and rebuild.
-                    UnwireHooks();
-
-                    Categories.Clear();
-                    foreach (var c in loaded)
-                        Categories.Add(c);
-
-                    WireHooks();
-
-                    // Normalize Order to current list index (keeps drag ordering stable)
-                    for (var i = 0; i < Categories.Count; i++)
-                        Categories[i].Order = i;
-
-                    // Default behavior: categories start in "use all subcategories" mode, but we do NOT override per-subcategory file mode.
-                    foreach (var c in Categories)
-                    {
-                        c.UseAllSubCategories = true;
-                    }
-                });
-            });
-
-            QueueRecomputePrompt(immediate: true);
-
-            _errors.Info("Reload end");
-        }
-        catch (Exception ex)
-        {
-            _errors.Report(ex, "Reload");
-            SystemMessages = _errors.LatestMessage;
-            _uiDialog.ShowError(ex.Message, "Reload failed");
-        }
-    }
-
-    private void WireHooks()
-    {
-        foreach (var cat in Categories)
-        {
-            cat.PropertyChanged += OnCategoryPropertyChanged;
-            foreach (var sub in cat.SubCategories)
-                {
-                    sub.PropertyChanged += OnSubCategoryPropertyChanged;
-                    foreach (var entry in sub.Entries)
-                        entry.PropertyChanged += OnEntryPropertyChanged;
-                }
-        }
-    }
-
-    private void UnwireHooks()
-    {
-        foreach (var cat in Categories)
-        {
-            cat.PropertyChanged -= OnCategoryPropertyChanged;
-            foreach (var sub in cat.SubCategories)
-                {
-                    sub.PropertyChanged -= OnSubCategoryPropertyChanged;
-                    foreach (var entry in sub.Entries)
-                        entry.PropertyChanged -= OnEntryPropertyChanged;
-                }
-        }
-    }
-
-    private void OnCategoryPropertyChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        if (sender is not CategoryModel cat) return;
-        if (IsBulkUpdating()) return;
-
-        // User interaction telemetry (kept lightweight but specific).
-        // We log the most meaningful properties that reflect user intent.
-        var p = args.PropertyName ?? "";
-        if (p == nameof(CategoryModel.Enabled))
-            _errors.UiEvent("Category.Toggle", new { category = cat.Name, enabled = cat.Enabled });
-        else if (p == nameof(CategoryModel.UseAllSubCategories))
-            _errors.UiEvent("Category.UseAllSubCategories", new { category = cat.Name, value = cat.UseAllSubCategories });
-        else if (p == nameof(CategoryModel.Order))
-            _errors.UiEvent("Category.Reorder", new { category = cat.Name, order = cat.Order });
-        else if (p == nameof(CategoryModel.Prefix) || p == nameof(CategoryModel.Suffix))
-            _errors.UiEvent("Category.TextEdit", new { category = cat.Name, field = p, len = (p == nameof(CategoryModel.Prefix) ? cat.Prefix?.Length : cat.Suffix?.Length) });
-
-        QueueRecomputePrompt();
-    }
-
-    
-    private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        if (sender is not PromptEntryModel entry) return;
-        if (IsBulkUpdating()) return;
-
-        var p = args.PropertyName ?? "";
-        if (p == nameof(PromptEntryModel.Enabled))
-            _errors.UiEvent("Entry.Toggle", new { file = entry.Name, enabled = entry.Enabled });
-        else if (p == nameof(PromptEntryModel.Order))
-            _errors.UiEvent("Entry.Reorder", new { file = entry.Name, order = entry.Order });
-
-        QueueRecomputePrompt();
-    }
-
-private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        if (sender is not SubCategoryModel sub) return;
-        if (IsBulkUpdating()) return;
-
-        var p = args.PropertyName ?? "";
-
-        // User interaction telemetry (avoid ultra-chatty fields).
-        if (p == nameof(SubCategoryModel.Enabled))
-            _errors.UiEvent("SubCategory.Toggle", new { sub = sub.Name, enabled = sub.Enabled });
-        else if (p == nameof(SubCategoryModel.SelectedTxtFile))
-            _errors.UiEvent("SubCategory.SelectTxt", new { sub = sub.Name, file = sub.SelectedTxtFile });
-        else if (p == nameof(SubCategoryModel.UseAllTxtFiles))
-            _errors.UiEvent("SubCategory.UseAllTxtFiles", new { sub = sub.Name, value = sub.UseAllTxtFiles });
-        else if (p == nameof(SubCategoryModel.Order))
-            _errors.UiEvent("SubCategory.Reorder", new { sub = sub.Name, order = sub.Order });
-        else if (p == nameof(SubCategoryModel.Prefix) || p == nameof(SubCategoryModel.Suffix))
-            _errors.UiEvent("SubCategory.TextEdit", new { sub = sub.Name, field = p, len = (p == nameof(SubCategoryModel.Prefix) ? sub.Prefix?.Length : sub.Suffix?.Length) });
-
-        // Some SubCategory properties are UI-only or output-only.
-        // They must not trigger another prompt recompute (otherwise we can recurse endlessly).
-        var prop = p;
-
-        // UI-only signals should not trigger preview refresh or prompt recompute.
-        if (prop == nameof(SubCategoryModel.IsDropTarget) || prop == nameof(SubCategoryModel.EntrySummary))
+        if (_promptEnabled)
             return;
 
-        // CurrentEntry is set during prompt generation. Treat it as output-only.
-        // Do NOT refresh previews or trigger prompt recompute from it, or we can end up
-        // in a feedback loop (Generate -> CurrentEntry -> PropertyChanged -> Recompute -> ...).
-        if (prop == nameof(SubCategoryModel.CurrentEntry))
-        {
-            if (sub.IsExpanded)
-            {
-                var cur = string.IsNullOrWhiteSpace(sub.CurrentEntry) ? "" : $"\nCurrent entry: {sub.CurrentEntry}";
-                if (!string.IsNullOrWhiteSpace(sub.EntrySummary) && !sub.EntrySummary.EndsWith(cur))
-                    sub.EntrySummary = sub.EntrySummary.Split("\nCurrent entry:")[0] + cur;
-            }
-            return;
-        }
-
-        QueueRecomputePrompt();
+        _promptEnabled = true;
     }
 
-    private void Save()
+    private void OnSelectedFilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        try
+        if (!_promptEnabled)
         {
-            _schema.Save(Categories);
-            SystemMessages = "Saved config to _category.json and _subcategory.json.";
+            if (SearchViewModel.SelectedFiles.Count == 0 && SearchViewModel.SelectedTags.Count == 0)
+                return;
+
+            EnablePromptGeneration();
         }
-        catch (Exception ex)
-        {
-            _errors.Report(ex, "Save");
-            SystemMessages = _errors.LatestMessage;
-            _uiDialog.ShowError(ex.Message, "Save failed");
-        }
+
+        QueueRecomputePrompt(immediate: true);
     }
 
-    private bool IsBulkUpdating() => _bulkUpdateDepth > 0;
 
-    private void BulkUpdate(Action action)
-    {
-        try
-        {
-            _bulkUpdateDepth++;
-            action();
-        }
-        catch (Exception ex)
-        {
-            _errors.Report(ex, "BulkUpdate");
-            SystemMessages = _errors.LatestMessage;
-        }
-        finally
-        {
-            _bulkUpdateDepth = Math.Max(0, _bulkUpdateDepth - 1);
-        }
 
-        // One rebuild at the end.
-        QueueRecomputePrompt();
-    }
 
     internal void QueueRecomputePrompt(bool immediate = false)
     {
+        if (_suppressPromptRecompute || !_promptEnabled)
+            return;
+
         QueueAutoSave();
-        if (IsBulkUpdating()) return;
 
         _recomputeCts?.Cancel();
         _recomputeCts?.Dispose();
@@ -793,22 +475,12 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
         Run();
     }
 
-    private void AutoSave()
-    {
-        QueueAutoSave();
-    }
-
     private void QueueAutoSave()
     {
-        if (IsBulkUpdating()) return;
-
         _autoSaveCts?.Cancel();
         _autoSaveCts?.Dispose();
         _autoSaveCts = new CancellationTokenSource();
         var token = _autoSaveCts.Token;
-
-        // Snapshot categories on the UI thread to avoid collection mutation issues.
-        var snapshot = Categories.ToList();
 
         _ = Task.Run(async () =>
         {
@@ -817,13 +489,7 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 await Task.Delay(_autoSaveDebounce, token);
                 if (token.IsCancellationRequested) return;
 
-                _schema.Save(snapshot);
                 SaveUserSettings();
-
-                _dispatcher.Invoke(() =>
-                {
-                    SystemMessages = "Auto-saved.";
-                });
             }
             catch (OperationCanceledException)
             {
@@ -926,6 +592,9 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
 
     private void RecomputePrompt(int? seedOverride = null)
     {
+        if (_suppressPromptRecompute || !_promptEnabled)
+            return;
+
         try
         {
             // NOTE (2025-12-22): SwarmUI accepts seed values of -1 (random) or any non-negative number.
@@ -935,7 +604,8 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 ? null
                 : (seedLong.Value <= int.MaxValue ? (int)seedLong.Value : int.MaxValue);
 
-            var result = _promptGeneration.Generate(seed);
+            var files = SearchViewModel.SelectedFiles.Select(file => file.Path).ToList();
+            var result = _promptBuilder.Generate(files, seed);
             PromptText = result.Prompt;
             SystemMessages = string.Join(Environment.NewLine, result.Messages);
         }
@@ -1003,7 +673,8 @@ private void OnSubCategoryPropertyChanged(object? sender, PropertyChangedEventAr
                 var promptSeed = _random.Next(0, int.MaxValue);
                 try
                 {
-                    var res = _promptGeneration.Generate(promptSeed);
+                    var files = SearchViewModel.SelectedFiles.Select(file => file.Path).ToList();
+                    var res = _promptBuilder.Generate(files, promptSeed);
                     prompt = res.Prompt;
                 }
                 catch
@@ -1377,6 +1048,7 @@ private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, 
         // property will cause RecomputePrompt() via its setter.
         // NOTE (2025-12-22): SwarmUI rejects negative seeds other than -1.
         // Keep randomized seeds non-negative so they are always valid for both PromptLoom and SwarmUI.
+        EnablePromptGeneration();
         PromptSeedText = _random.Next(0, int.MaxValue).ToString();
         // When prefixes/suffixes are changed after randomization, recompute prompt using new random seed.
         QueueRecomputePrompt(immediate: true);
@@ -1511,10 +1183,10 @@ private void SaveOutput()
 
         try
         {
-            _fileSystem.CreateDirectory(_schema.OutputDir);
+            _fileSystem.CreateDirectory(_appDataStore.OutputDir);
             var ts = DateTime.Now;
             var baseName = $"prompt_{ts:yyyyMMdd_HHmmss}";
-            var path = Path.Combine(_schema.OutputDir, baseName + ".txt");
+            var path = Path.Combine(_appDataStore.OutputDir, baseName + ".txt");
             _fileSystem.WriteAllText(path, PromptText);
             SystemMessages = $"Saved prompt to {path}";
         }
@@ -1530,10 +1202,9 @@ private void SaveOutput()
     {
         try
         {
-            _schema.EnsureBaseFolders();
             _process.Start(new ProcessStartInfo
             {
-                FileName = _schema.CategoriesDir,
+                FileName = _appDataStore.LibraryDir,
                 UseShellExecute = true
             });
         }
@@ -1545,27 +1216,6 @@ private void SaveOutput()
         }
     }
 
-    private void RestoreOriginalCategories()
-    {
-        try
-        {
-            // This is an explicit, user-initiated action. We always back up the current Categories first.
-            _appDataStore.RestoreBundledCategories(_installDir, _errors);
-
-            // Reload view-model state from disk.
-            Reload();
-
-            SystemMessages = "Restored original Categories (backup created in Output folder).";
-        }
-        catch (Exception ex)
-        {
-            _errors.Report(ex, "RestoreOriginalCategories");
-            SystemMessages = _errors.LatestMessage;
-            _uiDialog.ShowError(ex.Message, "Restore Categories failed");
-        }
-    }
-
-    
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

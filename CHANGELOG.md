@@ -1,4 +1,5 @@
 CHANGE LOG
+- 2026-03-09 | Request: Tag-only docs | Remove category references from changelog entries.
 - 2025-12-30 | Request: Bump major version | Added 2.0.0 entry.
 
 # PromptLoom Changelog
@@ -24,7 +25,7 @@ CHANGE LOG
 - UI: Added "Send to SwarmUI" button next to Copy/Randomize, which calls SwarmUI's GenerateText2Image API using the current PromptLoom prompt.
 
 ## 1.7.5.7
-- Fixed build: restored missing namespace/usings in Services/PromptEngine.cs (Regex + CategoryModel).
+- Fixed build: restored missing namespace/usings in Services/PromptEngine.cs (Regex + model types).
 ## 1.7.5.6
 - Fixed underlying XAML structure issue: closed the View-pane DockPanel wrapper that was left unclosed, causing cascading MC3000 tag mismatch errors.
 ## 1.7.5.5
@@ -69,17 +70,17 @@ CHANGE LOG
 
 ## 1.7.0.2
 
-- Advanced View now uses nested tabs: Categories on top (color-coded), Subcategories below (inherits selected category color).
+- Advanced View now uses nested tabs: primary tag groups on top (color-coded), subfolders below (inherits selected group color).
 ## 1.7.0.1
 
 - Fix warning CS0162 (unreachable code) in PromptEngine.
-- Fix prompt generation regression: selecting a file in the UI now updates the owning SubCategory.SelectedEntry,
+- Fix prompt generation regression: selecting a file in the UI now updates the owning selection entry,
   so single-file mode and persistence use the correct file.
 - Default subcategory behavior is now **UseAllTxtFiles=true** for new configs (matches file-collection mental model).
 
 ## 1.7.0
 
-- Design fix: SubCategory now exposes a file-level list (Entries) mirroring the on-disk *.txt files.
+- Design fix: file groups now expose a file-level list (Entries) mirroring the on-disk *.txt files.
 - UI: manage individual files with checkbox include and up/down ordering.
 - Prompt generation: build from enabled files (or selected file in single-file mode).
 - Migration: legacy _subcategory.json (UseAllTxtFiles + SelectedTxtFile) is upgraded into Entries[] automatically.
@@ -114,23 +115,23 @@ CHANGE LOG
 
 ## 1.6.3
 
-### Categories restore flow
-- PromptLoom no longer auto-populates Categories on first run.
-- Added **File -> Restore Original Categories** to copy the bundled starter Categories into AppData.
-- A timestamped backup zip of your current Categories is created in the Output folder before restore.
+### Library restore flow
+- PromptLoom no longer auto-populates the Library on first run.
+- Added **File -> Restore Original Library** to copy the bundled starter Library into AppData.
+- A timestamped backup zip of your current Library is created in the Output folder before restore.
 
 ## 1.6.2
 
 ### Layout + usability
-- Removed the legacy **Negative** category (it is no longer loaded, and the bundled category folder was removed).
-- Advanced View is now reliably scrollable for long category or subcategory content.
-- Simple View category cards now render in a grid that fills **top to bottom**, then **left to right**.
+- Removed the legacy **Negative** library folder (it is no longer loaded, and the bundled folder was removed).
+- Advanced View is now reliably scrollable for long library or subfolder content.
+- Simple View cards now render in a grid that fills **top to bottom**, then **left to right**.
 
 ## 1.6.1
 
 ### UI polish
 - Re-styled icon buttons to be round, smaller, and more readable.
-- Added padding between category titles and the action buttons.
+- Added padding between titles and the action buttons.
 - Swapped MDL2 glyphs for crisp vector icons.
 - Normalized action button sizing using fixed-width button columns.
 

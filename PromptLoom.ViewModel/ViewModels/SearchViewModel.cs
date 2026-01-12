@@ -1,8 +1,11 @@
 // CHANGE LOG
+// - 2026-03-09 | Request: Clear selected files | Add explicit command to clear selected file list.
+// - 2026-03-09 | Request: Selected files persist | Keep selected files when tags change or searches refresh.
+// - 2026-03-09 | Request: Indexing progress | Surface per-file indexing progress during background sync.
+// - 2026-03-09 | Request: Background indexing | Run tag index sync on a background worker to avoid UI stalls.
+// - 2026-03-06 | Request: TF-IDF relevance | Compute relevance percentages from TF-IDF scores.
+// - 2026-03-06 | Fix: Tag sorting | Preserve tag items while reordering by count and relevance.
 // - 2026-03-02 | Request: File relevance | Compute per-file relevance percentages for pills.
-// - 2026-03-02 | Request: Selectable files | Add selectable file pills with ordered selection commands.
-// - 2026-01-02 | Fix: Tag count shadowing | Avoid duplicate local names in UpdateTagCountsAsync.
-// - 2026-01-02 | Request: Tag count scope | Use global counts for suggestions before selection.
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -140,6 +143,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         RemoveSelectedFileCommand = new RelayCommand("Search.RemoveSelectedFile", RemoveSelectedFile, errorReporter: _errors);
         MoveSelectedFileUpCommand = new RelayCommand("Search.MoveSelectedFileUp", MoveSelectedFileUp, errorReporter: _errors);
         MoveSelectedFileDownCommand = new RelayCommand("Search.MoveSelectedFileDown", MoveSelectedFileDown, errorReporter: _errors);
+        ClearSelectedFilesCommand = new RelayCommand("Search.ClearSelectedFiles", _ => ClearSelectedFiles(), errorReporter: _errors);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -272,6 +276,11 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     public RelayCommand RemoveSelectedFileCommand { get; }
 
     /// <summary>
+    /// Command to clear all selected files.
+    /// </summary>
+    public RelayCommand ClearSelectedFilesCommand { get; }
+
+    /// <summary>
     /// Command to move a selected file up.
     /// </summary>
     public RelayCommand MoveSelectedFileUpCommand { get; }
@@ -294,7 +303,15 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
         try
         {
-            var result = await _tagIndexer.SyncAsync();
+            var progress = new Progress<TagIndexProgress>(info =>
+            {
+                if (info.Total <= 0)
+                    IndexStatusMessage = $"{info.Stage}...";
+                else
+                    IndexStatusMessage = $"{info.Stage} ({info.Processed}/{info.Total}, {info.Percent}%)";
+            });
+
+            var result = await Task.Run(async () => await _tagIndexer.SyncAsync(progress: progress));
             _totalFiles = result.TotalFiles;
             IndexStatusMessage = FormatIndexSummary(result);
             await RefreshResultsAsync();
@@ -310,7 +327,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
     private void AddTag(object? parameter)
     {
-        var tag = NormalizeTag(ResolveTagName(parameter) ?? SearchQuery);
+        var tag = NormalizeUserInputTag(ResolveTagName(parameter) ?? SearchQuery);
         SearchQuery = string.Empty;
         if (tag.Length == 0)
             return;
@@ -341,10 +358,14 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         SelectedTags.Clear();
         RelatedTags.Clear();
         Results.Clear();
-        SelectedFiles.Clear();
         _currentFilePaths = Array.Empty<string>();
         State = ResolveStateAfterSearch(0);
         _ = RefreshSuggestionsAsync();
+    }
+
+    private void ClearSelectedFiles()
+    {
+        SelectedFiles.Clear();
     }
 
     private async Task RefreshSuggestionsAsync()
@@ -371,6 +392,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
             ReplaceCollection(SuggestedTags, filtered.Select(tag => new TagDisplayItem(tag)));
             await UpdateTagCountsAsync(SuggestedTags, useAllFilesWhenEmpty: SelectedTags.Count == 0);
+            SortTagCollection(SuggestedTags);
         }
         catch (OperationCanceledException)
         {
@@ -396,7 +418,6 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         {
             Results.Clear();
             RelatedTags.Clear();
-            SelectedFiles.Clear();
             _currentFilePaths = Array.Empty<string>();
             State = ResolveStateAfterSearch(0);
             return;
@@ -404,13 +425,16 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
         var rawResults = await _tagSearchService.SearchFilesAsync(SelectedTags.Select(tag => tag.Name).ToList());
         var scoredResults = ApplyRelevanceScores(rawResults);
-        ReplaceCollection(Results, scoredResults);
-        SyncSelectedFiles(scoredResults);
-        _currentFilePaths = scoredResults.Select(result => result.Path).ToList();
+        var orderedResults = OrderResults(scoredResults);
+        ReplaceCollection(Results, orderedResults);
+        SyncSelectedFiles(orderedResults);
+        _currentFilePaths = orderedResults.Select(result => result.Path).ToList();
         await UpdateTagCountsAsync(SelectedTags, useAllFilesWhenEmpty: false);
         await UpdateTagCountsAsync(SuggestedTags, useAllFilesWhenEmpty: false);
-        await RefreshRelatedTagsAsync(scoredResults);
-        State = ResolveStateAfterSearch(scoredResults.Count);
+        SortTagCollection(SelectedTags);
+        SortTagCollection(SuggestedTags);
+        await RefreshRelatedTagsAsync(orderedResults);
+        State = ResolveStateAfterSearch(orderedResults.Count);
     }
 
     private SearchState ResolveStateAfterSearch(int resultCount)
@@ -424,8 +448,8 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         return SearchState.Ready;
     }
 
-    private static string NormalizeTag(string tag)
-        => tag.Trim().ToLowerInvariant();
+    private string NormalizeUserInputTag(string tag)
+        => _tagSearchService.NormalizeTag(tag);
 
     private static string? ResolveTagName(object? parameter)
     {
@@ -511,15 +535,15 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         if (results.Count == 0)
             return results;
 
-        var maxMatchCount = results.Max(result => result.MatchCount);
-        if (maxMatchCount <= 0)
+        var maxScore = results.Max(result => result.RelevanceScore);
+        if (maxScore <= 0)
             return results.Select(result => result with { RelevancePercent = 0 }).ToList();
 
         return results
             .Select(result => result with
             {
                 RelevancePercent = (int)Math.Round(
-                    result.MatchCount / (double)maxMatchCount * 100d,
+                    result.RelevanceScore / maxScore * 100d,
                     MidpointRounding.AwayFromZero)
             })
             .ToList();
@@ -534,13 +558,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         for (var i = SelectedFiles.Count - 1; i >= 0; i--)
         {
             var selected = SelectedFiles[i];
-            if (!lookup.TryGetValue(selected.Path, out var updated))
-            {
-                SelectedFiles.RemoveAt(i);
-                continue;
-            }
-
-            if (!Equals(selected, updated))
+            if (lookup.TryGetValue(selected.Path, out var updated) && !Equals(selected, updated))
                 SelectedFiles[i] = updated;
         }
     }
@@ -558,7 +576,12 @@ public sealed class SearchViewModel : INotifyPropertyChanged
             results.Select(result => result.Path).ToList(),
             RelatedLimit);
 
-        ReplaceCollection(RelatedTags, related.Select(item => new RelatedTagItem(item.Name, item.RelevancePercent)));
+        ReplaceCollection(
+            RelatedTags,
+            related
+                .OrderByDescending(item => item.RelevancePercent)
+                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(item => new RelatedTagItem(item.Name, item.RelevancePercent)));
     }
 
     private async Task UpdateTagCountsAsync(IReadOnlyCollection<TagDisplayItem> tags, bool useAllFilesWhenEmpty)
@@ -595,6 +618,30 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         target.Clear();
         foreach (var item in items)
             target.Add(item);
+    }
+
+    private static IReadOnlyList<TagFileInfo> OrderResults(IReadOnlyList<TagFileInfo> results)
+    {
+        if (results.Count <= 1)
+            return results;
+
+        return results
+            .OrderByDescending(result => result.RelevancePercent)
+            .ThenBy(result => result.Path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void SortTagCollection(ObservableCollection<TagDisplayItem> tags)
+    {
+        if (tags.Count <= 1)
+            return;
+
+        ReplaceCollection(
+            tags,
+            tags
+                .OrderByDescending(tag => tag.Count)
+                .ThenBy(tag => tag.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList());
     }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null)

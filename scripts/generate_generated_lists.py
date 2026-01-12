@@ -1,10 +1,11 @@
 # CHANGE LOG
+# - 2026-03-09 | Request: Tag-only mode | Point generated lists to the library folder.
 # - 2026-01-05 | Request: Generated lists | Create 90s, creative, and underrepresented lists.
 
 import os
 from datetime import datetime
 
-root = os.path.join(os.environ.get("LOCALAPPDATA", ""), "PromptLoom", "Categories", "Generated")
+root = os.path.join(os.environ.get("LOCALAPPDATA", ""), "PromptLoom", "Library", "Generated")
 if not os.path.isdir(root):
     raise SystemExit(f"Generated folder not found: {root}")
 

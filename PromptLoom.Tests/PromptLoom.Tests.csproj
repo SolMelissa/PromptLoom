@@ -30,4 +30,11 @@ CHANGE LOG
     <ProjectReference Include="..\PromptLoom.ViewModel\PromptLoom.ViewModel.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\Resources\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Resources\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
 </Project>
