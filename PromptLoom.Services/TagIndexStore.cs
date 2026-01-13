@@ -1,7 +1,7 @@
 // CHANGE LOG
+// - 2026-03-12 | Request: Tag colors | Add tag color storage and metadata to the tag index schema.
+// - 2026-03-12 | Request: Category colors | Add category color storage to the tag index schema.
 // - 2026-03-07 | Fix: Lemmatization reindex | Bump the index version so existing data is rebuilt with the new tokenizer.
-// - 2026-03-06 | Request: Tag-only mode | Rename index root to library storage.
-// - 2026-03-06 | Request: TF-IDF metadata | Store per-tag occurring file counts in the index.
 using System;
 using System.IO;
 using System.Threading;
@@ -106,6 +106,22 @@ CREATE TABLE IF NOT EXISTS IndexState (
     LastScanTicks INTEGER NOT NULL,
     LibraryRoot TEXT NOT NULL,
     IndexVersion INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS CategoryColors (
+    Category TEXT NOT NULL PRIMARY KEY,
+    ColorHex TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS TagColors (
+    Tag TEXT NOT NULL PRIMARY KEY,
+    ColorHex TEXT NOT NULL,
+    ClusterId INTEGER NOT NULL,
+    UpdatedTicks INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS TagColorState (
+    Id INTEGER PRIMARY KEY CHECK (Id = 1),
+    LastTagCount INTEGER NOT NULL DEFAULT 0,
+    LastTagHash TEXT NOT NULL DEFAULT '',
+    LastUpdatedTicks INTEGER NOT NULL DEFAULT 0
 );";
 
         await ExecuteNonQueryAsync(connection, schemaSql, ct);
@@ -129,6 +145,14 @@ UPDATE IndexState SET SchemaVersion = $schemaVersion, LibraryRoot = $libraryRoot
             stateCommand.Parameters.AddWithValue("$libraryRoot", _appDataStore.LibraryDir);
             stateCommand.Parameters.AddWithValue("$indexVersion", DefaultIndexVersion);
             await stateCommand.ExecuteNonQueryAsync(ct);
+        }
+
+        await using (var colorStateCommand = connection.CreateCommand())
+        {
+            colorStateCommand.CommandText = @"
+INSERT OR IGNORE INTO TagColorState (Id, LastTagCount, LastTagHash, LastUpdatedTicks)
+VALUES (1, 0, '', 0);";
+            await colorStateCommand.ExecuteNonQueryAsync(ct);
         }
     }
 
