@@ -1,4 +1,5 @@
 // CHANGE LOG
+// - 2026-03-12 | Request: Restore window position | Apply and persist window placement on open/close.
 // - 2025-12-29 | Request: Versioned titlebar | Display MAJOR.MINOR.PATCH #COMMITCOUNT in the window title.
 // - 2025-12-25 | Request: Allow injected MainViewModel | Enabled constructor injection for DI/testing.
 //
@@ -32,6 +33,7 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         ErrorReporter.Instance.Info("MainWindow ctor begin");
         InitializeComponent();
+        _viewModel?.ApplySavedWindowPlacement(this);
         Title = BuildWindowTitle();
         ErrorReporter.Instance.Info("MainWindow InitializeComponent done");
 
@@ -65,6 +67,11 @@ public partial class MainWindow : Window
                         MessageBoxImage.Error);
                 }
             }), DispatcherPriority.Loaded);
+        };
+
+        Closing += (_, __) =>
+        {
+            GetActiveViewModel()?.SaveWindowPlacement(this);
         };
     }
 
@@ -119,6 +126,8 @@ public partial class MainWindow : Window
     }
 
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+
+    private MainViewModel? GetActiveViewModel() => DataContext as MainViewModel ?? _viewModel;
 
 	// Close the overlay when clicking the dark background (but not when clicking the image or info bar).
 	private void ImageOverlayRoot_MouseDown(object sender, MouseButtonEventArgs e)

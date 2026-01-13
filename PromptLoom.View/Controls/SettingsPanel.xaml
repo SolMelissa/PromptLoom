@@ -1,0 +1,116 @@
+<!--
+CHANGE LOG
+- 2026-03-12 | Request: Settings tab | Extract SwarmUI settings into a dedicated panel.
+-->
+<UserControl x:Class="PromptLoom.Controls.SettingsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="720"
+             d:DesignWidth="680">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <DataTemplate x:Key="SwarmAssetCardTemplate">
+            <Border Background="#14000000" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
+                    CornerRadius="8" Padding="6" Margin="0,2" ToolTip="{Binding Name}">
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock FontSize="11" Opacity="0.65" Text="{Binding PathHint}" TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding HasPathHint, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock FontSize="11" Opacity="0.7" Text="{Binding KindLabel}"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Border Padding="10" Background="Transparent">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource AccentPink}" Text="Settings"/>
+                <TextBlock Margin="0,4,0,12" Opacity="0.75" Text="Connection + tools for realtime generation and model selection."/>
+
+                <TextBlock FontWeight="SemiBold" Text="Server URL"/>
+                <TextBox Margin="0,6,0,12" Background="{StaticResource InputCyan}"
+                         Text="{Binding SwarmUrl, UpdateSourceTrigger=PropertyChanged}"/>
+
+                <TextBlock FontWeight="SemiBold" Text="Auth Token (optional)"/>
+                <TextBox Margin="0,6,0,12" Background="{StaticResource InputCyan}"
+                         Text="{Binding SwarmToken, UpdateSourceTrigger=PropertyChanged}"/>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                    <CheckBox Content="Send Model Override" IsChecked="{Binding SendSwarmModelOverride}" Margin="0,0,12,0"/>
+                    <TextBlock FontWeight="SemiBold" Text="Model" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,12">
+                    <ComboBox MinWidth="360" Background="{StaticResource InputCyan}"
+                              IsEnabled="{Binding CanEditSwarmModelOverride}"
+                              ItemsSource="{Binding SwarmModels}"
+                              ItemTemplate="{StaticResource SwarmAssetCardTemplate}"
+                              SelectedValuePath="Name"
+                              SelectedValue="{Binding SwarmSelectedModel, UpdateSourceTrigger=PropertyChanged}"/>
+                    <Button Width="150" Margin="8,0,0,0" Content="Refresh Models" Command="{Binding RefreshSwarmModelsCommand}"/>
+                </StackPanel>
+
+                <Border CornerRadius="10" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Padding="10" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="Generation Overrides" Margin="0,0,0,8"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <CheckBox Content="Send Steps" IsChecked="{Binding SendSwarmSteps}" Margin="0,0,12,0"/>
+                            <TextBlock Opacity="0.75" Text="Steps:" VerticalAlignment="Center"/>
+                            <TextBox Width="80" Margin="8,0,0,0" Background="{StaticResource InputCyan}"
+                                     IsEnabled="{Binding CanEditSwarmSteps}"
+                                     Text="{Binding SwarmSteps, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <CheckBox Content="Send CFG Scale" IsChecked="{Binding SendSwarmCfgScale}" Margin="0,0,12,0"/>
+                            <TextBlock Opacity="0.75" Text="CFG:" VerticalAlignment="Center"/>
+                            <TextBox Width="80" Margin="8,0,0,0" Background="{StaticResource InputCyan}"
+                                     IsEnabled="{Binding CanEditSwarmCfgScale}"
+                                     Text="{Binding SwarmCfgScale, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                            <CheckBox Content="Send LoRAs" IsChecked="{Binding SendSwarmLoras}" Margin="0,0,12,0"/>
+                            <TextBlock FontWeight="SemiBold" Text="LoRAs" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,8">
+                            <ComboBox MinWidth="300" Background="{StaticResource InputCyan}" IsEnabled="{Binding CanEditSwarmLoras}"
+                                      ItemsSource="{Binding SwarmLoras}"
+                                      ItemTemplate="{StaticResource SwarmAssetCardTemplate}"
+                                      SelectedValuePath="Name"
+                                      SelectedValue="{Binding SwarmSelectedLora1, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Opacity="0.75" VerticalAlignment="Center" Margin="10,0,0,0" Text="Weight:"/>
+                            <TextBox Width="70" Margin="8,0,0,0" Background="{StaticResource InputCyan}" IsEnabled="{Binding CanEditSwarmLoras}"
+                                     Text="{Binding SwarmLora1Weight, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <ComboBox MinWidth="300" Background="{StaticResource InputCyan}" IsEnabled="{Binding CanEditSwarmLoras}"
+                                      ItemsSource="{Binding SwarmLoras}"
+                                      ItemTemplate="{StaticResource SwarmAssetCardTemplate}"
+                                      SelectedValuePath="Name"
+                                      SelectedValue="{Binding SwarmSelectedLora2, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Opacity="0.75" VerticalAlignment="Center" Margin="10,0,0,0" Text="Weight:"/>
+                            <TextBox Width="70" Margin="8,0,0,0" Background="{StaticResource InputCyan}" IsEnabled="{Binding CanEditSwarmLoras}"
+                                     Text="{Binding SwarmLora2Weight, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+
+                        <Button Width="150" Content="Refresh LoRAs" Command="{Binding RefreshSwarmLorasCommand}"/>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <Button Width="150" Margin="0,0,8,0" Content="Test Connection" Command="{Binding TestSwarmConnectionCommand}"/>
+                    <Button Width="150" Content="Open SwarmUI" Command="{Binding OpenSwarmUiCommand}"/>
+                </StackPanel>
+
+                <Border CornerRadius="10" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" Padding="10">
+                    <TextBlock Text="{Binding SwarmUiStatusText}" TextWrapping="Wrap"/>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>
