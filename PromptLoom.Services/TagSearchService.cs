@@ -1,7 +1,7 @@
 // CHANGE LOG
-// - 2026-03-02 | Request: File relevance | Add relevance percent for search results.
-// - 2026-01-02 | Request: Tag count scope | Add global tag count queries for suggestions.
-// - 2026-01-02 | Request: Tag counts | Add tag reference counts and match totals.
+// - 2026-03-12 | Request: Tag colors | Load tag colors and return pill data for UI tag chips.
+// - 2026-03-12 | Request: File card data | Load folder colors + top content tags for file results.
+// - 2026-03-12 | Request: Tag weights | Weight filename/path/content at 60/30/10 for relevance.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,12 +30,37 @@ public sealed record TagFileInfo(string Path, string FileName, int MatchCount)
     /// TF-IDF score used to compute relevance.
     /// </summary>
     public double RelevanceScore { get; init; }
+
+    /// <summary>
+    /// Relative folder path from the categories root.
+    /// </summary>
+    public string RelativeFolderPath { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Top tags ordered by content count for this file.
+    /// </summary>
+    public IReadOnlyList<string> TopTags { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Color codes for each folder segment in the relative path.
+    /// </summary>
+    public IReadOnlyList<string> PathColors { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Render-ready tag pill data.
+    /// </summary>
+    public IReadOnlyList<TagPill> TagPills { get; init; } = Array.Empty<TagPill>();
 }
 
 /// <summary>
 /// Related tag result with a relevance percentage.
 /// </summary>
 public sealed record TagRelatedInfo(string Name, int RelevancePercent);
+
+/// <summary>
+/// Tag pill display data.
+/// </summary>
+public sealed record TagPill(string Text, string ColorHex);
 
 /// <summary>
 /// Abstraction for tag search queries and suggestions.
@@ -68,6 +93,28 @@ public interface ITagSearchService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Returns the stored category colors for the provided folder paths.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, string>> GetCategoryColorsAsync(
+        IReadOnlyCollection<string> folderPaths,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the stored colors for the provided tag names.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, string>> GetTagColorsAsync(
+        IReadOnlyCollection<string> tags,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the top tags by content count for each file path.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetTopTagsByContentAsync(
+        IReadOnlyCollection<string> filePaths,
+        int limit,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Returns related tags ordered by relevance for the provided file list.
     /// </summary>
     Task<IReadOnlyList<TagRelatedInfo>> GetRelatedTagsAsync(
@@ -87,9 +134,9 @@ public interface ITagSearchService
 /// </summary>
 public sealed class TagSearchService : ITagSearchService
 {
-    private const double FileNameWeight = 3.0;
-    private const double PathWeight = 2.0;
-    private const double ContentWeight = 1.0;
+    private const double FileNameWeight = 0.6;
+    private const double PathWeight = 0.3;
+    private const double ContentWeight = 0.1;
 
     private readonly ITagIndexStore _tagIndexStore;
     private readonly IStopWordsStore _stopWordsStore;
@@ -154,25 +201,38 @@ public sealed class TagSearchService : ITagSearchService
         await connection.OpenAsync(ct);
 
         var paramNames = normalizedTags.Select((_, index) => $"$tag{index}").ToList();
-        var sql = "SELECT f.Path, f.FileName, SUM(ft.OccurrenceCount) AS MatchCount " +
+        var sql = "SELECT f.Path, f.FileName, " +
+                  "SUM(ft.OccurrenceCount) AS MatchCount, " +
+                  "(SUM(ft.FileNameCount) * $fileNameWeight) + " +
+                  "(SUM(ft.PathCount) * $pathWeight) + " +
+                  "(SUM(ft.ContentCount) * $contentWeight) AS Score " +
                   "FROM Files f " +
                   "JOIN FileTags ft ON ft.FileId = f.Id " +
                   "JOIN Tags t ON t.Id = ft.TagId " +
                   $"WHERE t.Name IN ({string.Join(",", paramNames)}) " +
                   "GROUP BY f.Id " +
                   "HAVING COUNT(DISTINCT t.Name) = $tagCount " +
-                  "ORDER BY f.FileName COLLATE NOCASE;";
+                  "ORDER BY Score DESC, f.FileName COLLATE NOCASE;";
 
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         for (var i = 0; i < normalizedTags.Count; i++)
             command.Parameters.AddWithValue(paramNames[i], normalizedTags[i]);
         command.Parameters.AddWithValue("$tagCount", normalizedTags.Count);
+        command.Parameters.AddWithValue("$fileNameWeight", FileNameWeight);
+        command.Parameters.AddWithValue("$pathWeight", PathWeight);
+        command.Parameters.AddWithValue("$contentWeight", ContentWeight);
 
         var results = new List<TagFileInfo>();
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            results.Add(new TagFileInfo(reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+        {
+            var info = new TagFileInfo(reader.GetString(0), reader.GetString(1), reader.GetInt32(2))
+            {
+                RelevanceScore = reader.GetDouble(3)
+            };
+            results.Add(info);
+        }
 
         return results;
     }
@@ -259,6 +319,127 @@ public sealed class TagSearchService : ITagSearchService
             results[reader.GetString(0)] = reader.GetInt32(1);
 
         return results;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<string, string>> GetCategoryColorsAsync(
+        IReadOnlyCollection<string> folderPaths,
+        CancellationToken ct = default)
+    {
+        if (folderPaths.Count == 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        await _tagIndexStore.InitializeAsync(ct);
+
+        await using var connection = _tagIndexStore.CreateConnection();
+        await connection.OpenAsync(ct);
+
+        var pathParams = folderPaths.Select((_, index) => $"$path{index}").ToList();
+        var sql = $"SELECT Category, ColorHex FROM CategoryColors WHERE Category IN ({string.Join(",", pathParams)});";
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        var idx = 0;
+        foreach (var path in folderPaths)
+        {
+            command.Parameters.AddWithValue(pathParams[idx], path);
+            idx++;
+        }
+
+        var results = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            results[reader.GetString(0)] = reader.GetString(1);
+
+        return results;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<string, string>> GetTagColorsAsync(
+        IReadOnlyCollection<string> tags,
+        CancellationToken ct = default)
+    {
+        if (tags.Count == 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var tagList = tags.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (tagList.Count == 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        await _tagIndexStore.InitializeAsync(ct);
+
+        await using var connection = _tagIndexStore.CreateConnection();
+        await connection.OpenAsync(ct);
+
+        var tagParams = tagList.Select((_, index) => $"$tag{index}").ToList();
+        var sql = $"SELECT Tag, ColorHex FROM TagColors WHERE Tag IN ({string.Join(",", tagParams)});";
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        for (var i = 0; i < tagParams.Count; i++)
+            command.Parameters.AddWithValue(tagParams[i], tagList[i]);
+
+        var results = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            results[reader.GetString(0)] = reader.GetString(1);
+
+        return results;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetTopTagsByContentAsync(
+        IReadOnlyCollection<string> filePaths,
+        int limit,
+        CancellationToken ct = default)
+    {
+        if (filePaths.Count == 0 || limit <= 0)
+            return new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
+        await _tagIndexStore.InitializeAsync(ct);
+
+        await using var connection = _tagIndexStore.CreateConnection();
+        await connection.OpenAsync(ct);
+
+        var pathParams = filePaths.Select((_, index) => $"$path{index}").ToList();
+        var sql = "SELECT f.Path, t.Name, SUM(ft.ContentCount) AS Score " +
+                  "FROM FileTags ft " +
+                  "JOIN Tags t ON t.Id = ft.TagId " +
+                  "JOIN Files f ON f.Id = ft.FileId " +
+                  $"WHERE f.Path IN ({string.Join(",", pathParams)}) " +
+                  "GROUP BY f.Path, t.Name " +
+                  "HAVING Score > 0 " +
+                  "ORDER BY f.Path, Score DESC, t.Name COLLATE NOCASE;";
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        var idx = 0;
+        foreach (var path in filePaths)
+        {
+            command.Parameters.AddWithValue(pathParams[idx], path);
+            idx++;
+        }
+
+        var results = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var path = reader.GetString(0);
+            var tag = reader.GetString(1);
+            if (!results.TryGetValue(path, out var list))
+            {
+                list = new List<string>(limit);
+                results[path] = list;
+            }
+
+            if (list.Count < limit)
+                list.Add(tag);
+        }
+
+        return results.ToDictionary(
+            entry => entry.Key,
+            entry => (IReadOnlyList<string>)entry.Value,
+            StringComparer.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc/>

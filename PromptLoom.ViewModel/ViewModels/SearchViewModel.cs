@@ -1,15 +1,12 @@
 // CHANGE LOG
-// - 2026-03-09 | Request: Clear selected files | Add explicit command to clear selected file list.
-// - 2026-03-09 | Request: Selected files persist | Keep selected files when tags change or searches refresh.
-// - 2026-03-09 | Request: Indexing progress | Surface per-file indexing progress during background sync.
-// - 2026-03-09 | Request: Background indexing | Run tag index sync on a background worker to avoid UI stalls.
-// - 2026-03-06 | Request: TF-IDF relevance | Compute relevance percentages from TF-IDF scores.
-// - 2026-03-06 | Fix: Tag sorting | Preserve tag items while reordering by count and relevance.
-// - 2026-03-02 | Request: File relevance | Compute per-file relevance percentages for pills.
+// - 2026-01-12 | Request: Indexing progress | Add elapsed-time heartbeat for long-running index stages.
+// - 2026-01-12 | Request: Indexing responsiveness | Run tag queries on background threads and marshal UI updates.
+// - 2026-01-12 | Request: Tag pills | Add color metadata to tags and file cards.
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -36,11 +33,13 @@ public enum SearchState
 public sealed class TagDisplayItem : INotifyPropertyChanged
 {
     private int _count;
+    private string _colorHex = string.Empty;
 
-    public TagDisplayItem(string name, int count = 0)
+    public TagDisplayItem(string name, int count = 0, string colorHex = "")
     {
         Name = name;
         _count = count;
+        _colorHex = colorHex ?? string.Empty;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -72,6 +71,27 @@ public sealed class TagDisplayItem : INotifyPropertyChanged
     /// </summary>
     public string DisplayText => $"{Name} ({Count})";
 
+    /// <summary>
+    /// Tag label for pill templates.
+    /// </summary>
+    public string Text => DisplayText;
+
+    /// <summary>
+    /// Stored color for the tag (hex).
+    /// </summary>
+    public string ColorHex
+    {
+        get => _colorHex;
+        set
+        {
+            if (_colorHex == value)
+                return;
+
+            _colorHex = value ?? string.Empty;
+            OnPropertyChanged();
+        }
+    }
+
     private void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
@@ -81,10 +101,11 @@ public sealed class TagDisplayItem : INotifyPropertyChanged
 /// </summary>
 public sealed class RelatedTagItem
 {
-    public RelatedTagItem(string name, int relevancePercent)
+    public RelatedTagItem(string name, int relevancePercent, string colorHex = "")
     {
         Name = name;
         RelevancePercent = relevancePercent;
+        ColorHex = colorHex ?? string.Empty;
     }
 
     /// <summary>
@@ -101,6 +122,16 @@ public sealed class RelatedTagItem
     /// Tag label with the relevance percentage appended.
     /// </summary>
     public string DisplayText => $"{Name} ({RelevancePercent}%)";
+
+    /// <summary>
+    /// Tag label for pill templates.
+    /// </summary>
+    public string Text => DisplayText;
+
+    /// <summary>
+    /// Stored color for the tag (hex).
+    /// </summary>
+    public string ColorHex { get; }
 }
 
 /// <summary>
@@ -114,13 +145,20 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     private readonly ITagIndexer _tagIndexer;
     private readonly ITagSearchService _tagSearchService;
     private readonly IErrorReporter _errors;
+    private readonly IDispatcherService _dispatcher;
+    private readonly string _libraryRoot;
     private CancellationTokenSource? _suggestionCts;
+    private CancellationTokenSource? _resultsCts;
+    private CancellationTokenSource? _indexTickerCts;
+    private DateTime _indexStartUtc;
+    private string _indexStatusBaseMessage = string.Empty;
 
     private string _searchQuery = string.Empty;
     private SearchState _state = SearchState.Ready;
     private string? _errorMessage;
     private string? _indexStatusMessage;
     private int _totalFiles = -1;
+    private int _categoryColorCount = -1;
     private IReadOnlyList<string> _currentFilePaths = Array.Empty<string>();
 
     /// <summary>
@@ -129,11 +167,26 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     public SearchViewModel(
         ITagIndexer tagIndexer,
         ITagSearchService tagSearchService,
-        IErrorReporter? errors = null)
+        IErrorReporter? errors)
+        : this(tagIndexer, tagSearchService, null, errors, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new search view model.
+    /// </summary>
+    public SearchViewModel(
+        ITagIndexer tagIndexer,
+        ITagSearchService tagSearchService,
+        string? libraryRoot = null,
+        IErrorReporter? errors = null,
+        IDispatcherService? dispatcher = null)
     {
         _tagIndexer = tagIndexer;
         _tagSearchService = tagSearchService;
         _errors = errors ?? new ErrorReporterAdapter();
+        _libraryRoot = string.IsNullOrWhiteSpace(libraryRoot) ? string.Empty : libraryRoot;
+        _dispatcher = dispatcher ?? new DispatcherService();
 
         RefreshCommand = new AsyncRelayCommand("Search.Refresh", _ => RefreshIndexAsync(), _ => State != SearchState.Indexing, _errors);
         AddTagCommand = new RelayCommand("Search.AddTag", AddTag, errorReporter: _errors);
@@ -298,13 +351,34 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     private async Task RefreshIndexAsync()
     {
         ErrorMessage = null;
-        IndexStatusMessage = "Indexing tags...";
+        _indexStatusBaseMessage = "Indexing tags";
+        IndexStatusMessage = $"{_indexStatusBaseMessage} (elapsed 00:00)";
         State = SearchState.Indexing;
 
         try
         {
+            _indexStartUtc = DateTime.UtcNow;
+            _indexTickerCts?.Cancel();
+            var tickerCts = new CancellationTokenSource();
+            _indexTickerCts = tickerCts;
+            _ = Task.Run(async () =>
+            {
+                while (!tickerCts.Token.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), tickerCts.Token);
+                    var elapsed = DateTime.UtcNow - _indexStartUtc;
+                    await InvokeOnUiAsync(() =>
+                    {
+                        IndexStatusMessage = $"{_indexStatusBaseMessage} (elapsed {elapsed:mm\\:ss})";
+                    });
+                }
+            }, tickerCts.Token);
+
             var progress = new Progress<TagIndexProgress>(info =>
             {
+                _indexStatusBaseMessage = info.Total <= 0
+                    ? info.Stage
+                    : $"{info.Stage} ({info.Processed}/{info.Total}, {info.Percent}%)";
                 if (info.Total <= 0)
                     IndexStatusMessage = $"{info.Stage}...";
                 else
@@ -313,6 +387,8 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
             var result = await Task.Run(async () => await _tagIndexer.SyncAsync(progress: progress));
             _totalFiles = result.TotalFiles;
+            _categoryColorCount = result.TotalCategoryColors;
+            _indexTickerCts?.Cancel();
             IndexStatusMessage = FormatIndexSummary(result);
             await RefreshResultsAsync();
         }
@@ -320,6 +396,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         {
             _errors.Report(ex, "SearchViewModel.RefreshIndex");
             ErrorMessage = ex.Message;
+            _indexTickerCts?.Cancel();
             IndexStatusMessage = "Indexing failed.";
             State = SearchState.Error;
         }
@@ -374,7 +451,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
         if (string.IsNullOrWhiteSpace(SearchQuery))
         {
-            SuggestedTags.Clear();
+            await InvokeOnUiAsync(() => SuggestedTags.Clear());
             return;
         }
 
@@ -383,16 +460,35 @@ public sealed class SearchViewModel : INotifyPropertyChanged
 
         try
         {
-            var suggestions = await _tagSearchService.SuggestTagsAsync(SearchQuery, SuggestionLimit, cts.Token);
+            var query = SearchQuery;
+            var selectedNames = SelectedTags
+                .Select(selected => selected.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var currentPaths = _currentFilePaths.ToList();
+            var useAllFilesWhenEmpty = SelectedTags.Count == 0;
+
+            var items = await Task.Run(async () =>
+            {
+                var suggestions = await _tagSearchService.SuggestTagsAsync(query, SuggestionLimit, cts.Token);
+                cts.Token.ThrowIfCancellationRequested();
+
+                var filtered = suggestions.Where(suggestion => !selectedNames.Contains(suggestion)).ToList();
+                var colors = await LoadTagColorsAsync(filtered, cts.Token);
+                var list = filtered.Select(tag =>
+                    new TagDisplayItem(tag, colorHex: ResolveTagColor(colors, tag))).ToList();
+                var counts = await LoadTagCountsAsync(filtered, currentPaths, useAllFilesWhenEmpty, cts.Token);
+                ApplyTagCounts(counts, list);
+
+                return list
+                    .OrderByDescending(tag => tag.Count)
+                    .ThenBy(tag => tag.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }, cts.Token);
+
             if (cts.IsCancellationRequested)
                 return;
 
-            var filtered = suggestions.Where(suggestion =>
-                !SelectedTags.Any(selected => string.Equals(selected.Name, suggestion, StringComparison.OrdinalIgnoreCase)));
-
-            ReplaceCollection(SuggestedTags, filtered.Select(tag => new TagDisplayItem(tag)));
-            await UpdateTagCountsAsync(SuggestedTags, useAllFilesWhenEmpty: SelectedTags.Count == 0);
-            SortTagCollection(SuggestedTags);
+            await InvokeOnUiAsync(() => ReplaceCollection(SuggestedTags, items));
         }
         catch (OperationCanceledException)
         {
@@ -400,8 +496,11 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             _errors.Report(ex, "SearchViewModel.RefreshSuggestions");
-            ErrorMessage = ex.Message;
-            State = SearchState.Error;
+            await InvokeOnUiAsync(() =>
+            {
+                ErrorMessage = ex.Message;
+                State = SearchState.Error;
+            });
         }
     }
 
@@ -409,32 +508,68 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     {
         if (_totalFiles == 0)
         {
-            Results.Clear();
-            State = SearchState.EmptyIndex;
+            await InvokeOnUiAsync(() =>
+            {
+                Results.Clear();
+                State = SearchState.EmptyIndex;
+            });
             return;
         }
 
         if (SelectedTags.Count == 0)
         {
-            Results.Clear();
-            RelatedTags.Clear();
-            _currentFilePaths = Array.Empty<string>();
-            State = ResolveStateAfterSearch(0);
+            await InvokeOnUiAsync(() =>
+            {
+                Results.Clear();
+                RelatedTags.Clear();
+                _currentFilePaths = Array.Empty<string>();
+                State = ResolveStateAfterSearch(0);
+            });
             return;
         }
 
-        var rawResults = await _tagSearchService.SearchFilesAsync(SelectedTags.Select(tag => tag.Name).ToList());
-        var scoredResults = ApplyRelevanceScores(rawResults);
-        var orderedResults = OrderResults(scoredResults);
-        ReplaceCollection(Results, orderedResults);
-        SyncSelectedFiles(orderedResults);
-        _currentFilePaths = orderedResults.Select(result => result.Path).ToList();
-        await UpdateTagCountsAsync(SelectedTags, useAllFilesWhenEmpty: false);
-        await UpdateTagCountsAsync(SuggestedTags, useAllFilesWhenEmpty: false);
-        SortTagCollection(SelectedTags);
-        SortTagCollection(SuggestedTags);
-        await RefreshRelatedTagsAsync(orderedResults);
-        State = ResolveStateAfterSearch(orderedResults.Count);
+        _resultsCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _resultsCts = cts;
+
+        var selectedNames = SelectedTags.Select(tag => tag.Name).ToList();
+        var suggestedNames = SuggestedTags.Select(tag => tag.Name).ToList();
+
+        try
+        {
+            var payload = await Task.Run(() =>
+                BuildSearchPayloadAsync(selectedNames, suggestedNames, cts.Token), cts.Token);
+
+            if (cts.IsCancellationRequested)
+                return;
+
+            await InvokeOnUiAsync(() =>
+            {
+                ReplaceCollection(Results, payload.Results);
+                SyncSelectedFiles(payload.Results);
+                _currentFilePaths = payload.Results.Select(result => result.Path).ToList();
+                ApplyTagCounts(payload.SelectedTagCounts, SelectedTags);
+                ApplyTagCounts(payload.SuggestedTagCounts, SuggestedTags);
+                ApplyTagColors(payload.SelectedTagColors, SelectedTags);
+                ApplyTagColors(payload.SuggestedTagColors, SuggestedTags);
+                SortTagCollection(SelectedTags);
+                SortTagCollection(SuggestedTags);
+                ReplaceCollection(RelatedTags, payload.RelatedTags);
+                State = ResolveStateAfterSearch(payload.Results.Count);
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _errors.Report(ex, "SearchViewModel.RefreshResults");
+            await InvokeOnUiAsync(() =>
+            {
+                ErrorMessage = ex.Message;
+                State = SearchState.Error;
+            });
+        }
     }
 
     private SearchState ResolveStateAfterSearch(int resultCount)
@@ -563,54 +698,183 @@ public sealed class SearchViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task RefreshRelatedTagsAsync(IReadOnlyList<TagFileInfo> results)
+    private async Task<SearchRefreshPayload> BuildSearchPayloadAsync(
+        IReadOnlyList<string> selectedTags,
+        IReadOnlyList<string> suggestedTags,
+        CancellationToken ct)
     {
-        if (SelectedTags.Count == 0 || results.Count == 0)
-        {
-            RelatedTags.Clear();
-            return;
-        }
+        var rawResults = await _tagSearchService.SearchFilesAsync(selectedTags, ct);
+        var scoredResults = ApplyRelevanceScores(rawResults);
+        var orderedResults = OrderResults(scoredResults);
+        var enrichedResults = await EnrichResultsAsync(orderedResults, ct);
 
-        var related = await _tagSearchService.GetRelatedTagsAsync(
-            SelectedTags.Select(tag => tag.Name).ToList(),
-            results.Select(result => result.Path).ToList(),
-            RelatedLimit);
+        var resultPaths = enrichedResults.Select(result => result.Path).ToList();
+        var selectedTagCounts = await LoadTagCountsAsync(selectedTags, resultPaths, useAllFilesWhenEmpty: false, ct);
+        var suggestedTagCounts = await LoadTagCountsAsync(suggestedTags, resultPaths, useAllFilesWhenEmpty: false, ct);
+        var selectedTagColors = await LoadTagColorsAsync(selectedTags, ct);
+        var suggestedTagColors = await LoadTagColorsAsync(suggestedTags, ct);
+        var relatedTags = await BuildRelatedTagsAsync(selectedTags, orderedResults, ct);
 
-        ReplaceCollection(
-            RelatedTags,
-            related
-                .OrderByDescending(item => item.RelevancePercent)
-                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(item => new RelatedTagItem(item.Name, item.RelevancePercent)));
+        return new SearchRefreshPayload(
+            enrichedResults,
+            relatedTags,
+            selectedTagCounts,
+            suggestedTagCounts,
+            selectedTagColors,
+            suggestedTagColors);
     }
 
-    private async Task UpdateTagCountsAsync(IReadOnlyCollection<TagDisplayItem> tags, bool useAllFilesWhenEmpty)
+    private async Task<IReadOnlyList<RelatedTagItem>> BuildRelatedTagsAsync(
+        IReadOnlyCollection<string> selectedTags,
+        IReadOnlyList<TagFileInfo> results,
+        CancellationToken ct)
     {
-        if (tags.Count == 0)
-            return;
+        if (selectedTags.Count == 0 || results.Count == 0)
+            return Array.Empty<RelatedTagItem>();
 
-        if (_currentFilePaths.Count == 0)
+        var related = await _tagSearchService.GetRelatedTagsAsync(
+            selectedTags,
+            results.Select(result => result.Path).ToList(),
+            RelatedLimit,
+            ct);
+
+        var relatedList = related
+            .OrderByDescending(item => item.RelevancePercent)
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var colors = await LoadTagColorsAsync(relatedList.Select(item => item.Name).ToList(), ct);
+
+        return relatedList
+            .Select(item => new RelatedTagItem(item.Name, item.RelevancePercent, ResolveTagColor(colors, item.Name)))
+            .ToList();
+    }
+
+    private async Task<IReadOnlyList<TagFileInfo>> EnrichResultsAsync(
+        IReadOnlyList<TagFileInfo> results,
+        CancellationToken ct)
+    {
+        if (results.Count == 0 || string.IsNullOrWhiteSpace(_libraryRoot))
+            return results;
+
+        var filePaths = results.Select(result => result.Path).ToList();
+        var topTags = await _tagSearchService.GetTopTagsByContentAsync(filePaths, 3, ct);
+        var allTopTags = topTags.Values.SelectMany(tags => tags).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var tagColors = await LoadTagColorsAsync(allTopTags, ct);
+
+        var folderPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var relativeFolders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var result in results)
         {
-            if (useAllFilesWhenEmpty)
-            {
-                var allTagNames = tags.Select(tag => tag.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                var allCounts = await _tagSearchService.CountTagReferencesAllFilesAsync(allTagNames);
-                foreach (var tag in tags)
-                    tag.Count = allCounts.TryGetValue(tag.Name, out var count) ? count : 0;
-                return;
-            }
-            else
-            {
-                foreach (var tag in tags)
-                    tag.Count = 0;
-                return;
-            }
+            var relativePath = Path.GetRelativePath(_libraryRoot, result.Path);
+            var folder = Path.GetDirectoryName(relativePath) ?? string.Empty;
+            if (folder == ".")
+                folder = string.Empty;
+
+            relativeFolders[result.Path] = folder;
+            AddFolderPaths(folder, folderPaths);
         }
 
-        var scopedTagNames = tags.Select(tag => tag.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var scopedCounts = await _tagSearchService.CountTagReferencesAsync(scopedTagNames, _currentFilePaths);
+        var colors = await _tagSearchService.GetCategoryColorsAsync(folderPaths, ct);
+
+        return results.Select(result =>
+        {
+            relativeFolders.TryGetValue(result.Path, out var folder);
+            var tags = topTags.TryGetValue(result.Path, out var list) ? list : Array.Empty<string>();
+            var pathColors = BuildPathColors(folder ?? string.Empty, colors);
+            var pills = tags.Select(tag => new TagPill(tag, ResolveTagColor(tagColors, tag))).ToList();
+            return result with
+            {
+                RelativeFolderPath = folder ?? string.Empty,
+                TopTags = tags,
+                PathColors = pathColors,
+                TagPills = pills
+            };
+        }).ToList();
+    }
+
+    private static void AddFolderPaths(string relativeFolder, ISet<string> target)
+    {
+        if (string.IsNullOrWhiteSpace(relativeFolder))
+            return;
+
+        var segments = relativeFolder.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        var current = string.Empty;
+        foreach (var segment in segments)
+        {
+            current = string.IsNullOrEmpty(current) ? segment : Path.Combine(current, segment);
+            target.Add(current);
+        }
+    }
+
+    private static IReadOnlyList<string> BuildPathColors(
+        string relativeFolder,
+        IReadOnlyDictionary<string, string> colors)
+    {
+        if (string.IsNullOrWhiteSpace(relativeFolder))
+            return Array.Empty<string>();
+
+        var segments = relativeFolder.Split(
+            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        var list = new List<string>(segments.Length);
+        var current = string.Empty;
+        foreach (var segment in segments)
+        {
+            current = string.IsNullOrEmpty(current) ? segment : Path.Combine(current, segment);
+            if (colors.TryGetValue(current, out var color))
+                list.Add(color);
+        }
+
+        return list;
+    }
+
+    private async Task<IReadOnlyDictionary<string, int>> LoadTagCountsAsync(
+        IReadOnlyCollection<string> tagNames,
+        IReadOnlyList<string> filePaths,
+        bool useAllFilesWhenEmpty,
+        CancellationToken ct)
+    {
+        if (tagNames.Count == 0)
+            return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        var distinctNames = tagNames.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        if (filePaths.Count == 0)
+        {
+            if (!useAllFilesWhenEmpty)
+                return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            return await _tagSearchService.CountTagReferencesAllFilesAsync(distinctNames, ct);
+        }
+
+        return await _tagSearchService.CountTagReferencesAsync(distinctNames, filePaths, ct);
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> LoadTagColorsAsync(
+        IReadOnlyCollection<string> tagNames,
+        CancellationToken ct)
+    {
+        if (tagNames.Count == 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var distinctNames = tagNames.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return await _tagSearchService.GetTagColorsAsync(distinctNames, ct);
+    }
+
+    private static void ApplyTagCounts(IReadOnlyDictionary<string, int> counts, IEnumerable<TagDisplayItem> tags)
+    {
         foreach (var tag in tags)
-            tag.Count = scopedCounts.TryGetValue(tag.Name, out var count) ? count : 0;
+            tag.Count = counts.TryGetValue(tag.Name, out var count) ? count : 0;
+    }
+
+    private static void ApplyTagColors(IReadOnlyDictionary<string, string> colors, IEnumerable<TagDisplayItem> tags)
+    {
+        foreach (var tag in tags)
+            tag.ColorHex = ResolveTagColor(colors, tag.Name);
     }
 
     private static void ReplaceCollection<T>(ObservableCollection<T> target, IEnumerable<T> items)
@@ -647,6 +911,46 @@ public sealed class SearchViewModel : INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
+    private Task InvokeOnUiAsync(Action action)
+    {
+        if (_dispatcher.CheckAccess())
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        var tcs = new TaskCompletionSource<bool>();
+        _dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                action();
+                tcs.SetResult(true);
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+        });
+        return tcs.Task;
+    }
+
+    private static string ResolveTagColor(IReadOnlyDictionary<string, string> colorMap, string tag)
+        => colorMap.TryGetValue(tag, out var color) ? color : string.Empty;
+
+    private sealed record SearchRefreshPayload(
+        IReadOnlyList<TagFileInfo> Results,
+        IReadOnlyList<RelatedTagItem> RelatedTags,
+        IReadOnlyDictionary<string, int> SelectedTagCounts,
+        IReadOnlyDictionary<string, int> SuggestedTagCounts,
+        IReadOnlyDictionary<string, string> SelectedTagColors,
+        IReadOnlyDictionary<string, string> SuggestedTagColors);
+
     private static string FormatIndexSummary(TagIndexSyncResult result)
-        => $"Index ready: {result.TotalFiles} files, {result.TotalTags} tags (added {result.AddedFiles}, updated {result.UpdatedFiles}, removed {result.RemovedFiles}).";
+    {
+        var colorsPart = result.TotalCategoryColors >= 0
+            ? $" Colors: {result.TotalCategoryColors}."
+            : string.Empty;
+        return $"Index ready: {result.TotalFiles} files, {result.TotalTags} tags (added {result.AddedFiles}, updated {result.UpdatedFiles}, removed {result.RemovedFiles}).{colorsPart}";
+    }
 }

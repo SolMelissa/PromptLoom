@@ -1,9 +1,7 @@
 // CHANGE LOG
+// - 2026-01-12 | Fix: Tag search tests | Implement new tag color and top-tag APIs in fake service.
 // - 2026-03-09 | Fix: Categories path | Update test file paths to AppData Categories layout.
 // - 2026-03-09 | Request: Indexing progress | Update fake tag indexer to match progress-aware interface.
-// - 2026-03-09 | Request: Tag-only mode | Replace category prompt tests with tag prompt builder coverage.
-// - 2026-03-09 | Request: Tag-only mode | Update MainViewModel smoke tests to use tag selection flow.
-// - 2025-12-25 | Test: Prompt generation baseline | Add baseline prompt engine coverage and view model smoke tests.
 
 using System;
 using System.Collections.Generic;
@@ -178,6 +176,23 @@ internal sealed class FakeTagSearchService : ITagSearchService
         IReadOnlyCollection<string> tags,
         CancellationToken ct = default)
         => Task.FromResult<IReadOnlyDictionary<string, int>>(new Dictionary<string, int>());
+
+    public Task<IReadOnlyDictionary<string, string>> GetCategoryColorsAsync(
+        IReadOnlyCollection<string> folderPaths,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
+
+    public Task<IReadOnlyDictionary<string, string>> GetTagColorsAsync(
+        IReadOnlyCollection<string> tags,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
+
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetTopTagsByContentAsync(
+        IReadOnlyCollection<string> filePaths,
+        int limit,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<string>>>(
+            new Dictionary<string, IReadOnlyList<string>>());
 
     public Task<IReadOnlyList<TagRelatedInfo>> GetRelatedTagsAsync(
         IReadOnlyCollection<string> selectedTags,

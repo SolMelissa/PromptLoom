@@ -1,7 +1,7 @@
 // CHANGE LOG
-// - 2026-03-09 | Fix: Cleanup | Remove unused JSON import after tag-only refactor.
-// - 2026-03-06 | Request: Tag-only mode | Remove category workflows and generate prompts from tag-selected files.
-// - 2026-03-06 | Request: Clear startup prompt | Gate prompt recompute until user interaction.
+// - 2026-03-12 | Fix: Status threading | Marshal status updates to the UI thread.
+// - 2026-03-12 | Request: Status summaries | Add index, generation, and error summaries for the footer.
+// - 2026-03-12 | Request: Batch qty range | Allow batch quantity 0-20 and skip zero-count sends.
 
 // NOTE (PromptLoom 1.8.0.1):
 // SwarmUI integration: added a SwarmUI bridge reference and a "Send Prompt to SwarmUI" button/command.
@@ -50,6 +50,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IErrorReporter _errors;
     private bool _suppressPromptRecompute;
     private bool _promptEnabled;
+    private bool _windowPlacementLoaded;
+    private bool _hasWindowPlacement;
+    private double _windowLeft = double.NaN;
+    private double _windowTop = double.NaN;
+    private double _windowWidth = double.NaN;
+    private double _windowHeight = double.NaN;
+    private WindowState _windowState = WindowState.Normal;
 
     // Reuse a single HttpClient instance for image downloads.
     private static readonly HttpClient s_http = new HttpClient();
@@ -90,6 +97,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         get => _swarmGenerationStatus;
         private set { _swarmGenerationStatus = value; OnPropertyChanged(); }
+    }
+
+    private string _indexStatusSummary = "Ready.";
+    public string IndexStatusSummary
+    {
+        get => _indexStatusSummary;
+        private set { _indexStatusSummary = value; OnPropertyChanged(); }
+    }
+
+    private string _errorStatusSummary = "None.";
+    public string ErrorStatusSummary
+    {
+        get => _errorStatusSummary;
+        private set { _errorStatusSummary = value; OnPropertyChanged(); }
     }
 
     private ImageSource? _latestGeneratedImage;
@@ -213,7 +234,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public int BatchQty
     {
         get => _batchQty;
-        set { _batchQty = Math.Clamp(value, 2, 50); OnPropertyChanged(); QueueAutoSave(); }
+        set { _batchQty = Math.Clamp(value, 0, 20); OnPropertyChanged(); QueueAutoSave(); }
     }
 
     private bool _batchRandomizePrompts = true;
@@ -298,7 +319,27 @@ public sealed class MainViewModel : INotifyPropertyChanged
     // (UI) Copy feedback is shown directly on the Copy button.
 
     private string _systemMessages = "";
-    public string SystemMessages { get => _systemMessages; set { _systemMessages = value; OnPropertyChanged(); } }
+    public string SystemMessages
+    {
+        get => _systemMessages;
+        set
+        {
+            if (_dispatcher.CheckAccess())
+            {
+                _systemMessages = value;
+                OnPropertyChanged();
+                UpdateErrorStatusSummary();
+                return;
+            }
+
+            _dispatcher.BeginInvoke(() =>
+            {
+                _systemMessages = value;
+                OnPropertyChanged();
+                UpdateErrorStatusSummary();
+            });
+        }
+    }
 
     public RelayCommand CopyCommand { get; }
     public RelayCommand SendToSwarmUiCommand { get; }
@@ -378,6 +419,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
         SearchViewModel = searchViewModel ?? BuildSearchViewModel();
         SearchViewModel.SelectedFiles.CollectionChanged += OnSelectedFilesChanged;
+        SearchViewModel.PropertyChanged += OnSearchViewModelPropertyChanged;
+        RecentBatches.CollectionChanged += OnRecentBatchesChanged;
 
         CopyCommand = new RelayCommand("Copy", _ => Copy(), errorReporter: _errors);
         SendToSwarmUiCommand = new RelayCommand("SendToSwarmUi", _ => SendToSwarmUi(), errorReporter: _errors);
@@ -398,6 +441,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _errors.Info("MainViewModel ctor end");
 
         LoadUserSettings();
+        UpdateIndexStatusSummary();
+        UpdateGenerationStatus();
+        UpdateErrorStatusSummary();
     }
 
     private SearchViewModel BuildSearchViewModel()
@@ -409,7 +455,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         var tagIndexer = new TagIndexer(tagIndexStore, stopWordsStore, tokenizer, _appDataStore, _fileSystem, _clock);
         var tagSearchService = new TagSearchService(tagIndexStore, stopWordsStore, tokenizer);
 
-        return new SearchViewModel(tagIndexer, tagSearchService, _errors);
+        return new SearchViewModel(tagIndexer, tagSearchService, _appDataStore.LibraryDir, _errors);
     }
 
 
@@ -530,13 +576,62 @@ public sealed class MainViewModel : INotifyPropertyChanged
             SwarmSelectedLora2 = s.SwarmSelectedLora2 ?? "";
             SwarmLora2Weight = s.SwarmLora2Weight;
 
-            BatchQty = Math.Clamp(s.BatchQty, 2, 50);
+            BatchQty = Math.Clamp(s.BatchQty, 0, 20);
             BatchRandomizePrompts = s.BatchRandomizePrompts;
+            LoadWindowPlacement(s);
+            _windowPlacementLoaded = true;
         }
         catch (Exception ex)
         {
             _errors.Report(ex, "LoadUserSettings");
         }
+    }
+
+    /// <summary>
+    /// Applies the last saved window placement to the provided window, if available.
+    /// </summary>
+    public void ApplySavedWindowPlacement(Window window)
+    {
+        if (window is null)
+            return;
+
+        LoadWindowPlacementIfNeeded();
+        if (!HasValidWindowPlacement())
+            return;
+
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Width = Math.Max(window.MinWidth, _windowWidth);
+        window.Height = Math.Max(window.MinHeight, _windowHeight);
+        window.Left = _windowLeft;
+        window.Top = _windowTop;
+        window.WindowState = _windowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+    }
+
+    /// <summary>
+    /// Captures the current window placement and persists it to user settings.
+    /// </summary>
+    public void SaveWindowPlacement(Window window)
+    {
+        if (window is null)
+            return;
+
+        var state = window.WindowState == WindowState.Minimized ? WindowState.Normal : window.WindowState;
+        var bounds = state == WindowState.Normal
+            ? new Rect(window.Left, window.Top, window.Width, window.Height)
+            : window.RestoreBounds;
+
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return;
+
+        _windowLeft = bounds.Left;
+        _windowTop = bounds.Top;
+        _windowWidth = bounds.Width;
+        _windowHeight = bounds.Height;
+        _windowState = state;
+        _hasWindowPlacement = true;
+        _windowPlacementLoaded = true;
+
+        SaveUserSettings();
     }
 
     private void SaveUserSettings()
@@ -566,7 +661,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 SwarmLora2Weight = SwarmLora2Weight,
 
                 BatchQty = BatchQty,
-                BatchRandomizePrompts = BatchRandomizePrompts
+                BatchRandomizePrompts = BatchRandomizePrompts,
+                WindowLeft = _hasWindowPlacement ? _windowLeft : null,
+                WindowTop = _hasWindowPlacement ? _windowTop : null,
+                WindowWidth = _hasWindowPlacement ? _windowWidth : null,
+                WindowHeight = _hasWindowPlacement ? _windowHeight : null,
+                WindowState = _hasWindowPlacement ? _windowState.ToString() : null
             };
 
             _settingsStore.Save(s);
@@ -576,6 +676,59 @@ public sealed class MainViewModel : INotifyPropertyChanged
             _errors.Report(ex, "SaveUserSettings");
         }
     }
+
+    private void LoadWindowPlacementIfNeeded()
+    {
+        if (_windowPlacementLoaded)
+            return;
+
+        _windowPlacementLoaded = true;
+
+        try
+        {
+            var s = _settingsStore.Load();
+            if (s is null)
+                return;
+
+            LoadWindowPlacement(s);
+        }
+        catch (Exception ex)
+        {
+            _errors.Report(ex, "LoadWindowPlacement");
+        }
+    }
+
+    private void LoadWindowPlacement(UserSettings settings)
+    {
+        if (settings.WindowLeft.HasValue &&
+            settings.WindowTop.HasValue &&
+            settings.WindowWidth.HasValue &&
+            settings.WindowHeight.HasValue)
+        {
+            _windowLeft = settings.WindowLeft.Value;
+            _windowTop = settings.WindowTop.Value;
+            _windowWidth = settings.WindowWidth.Value;
+            _windowHeight = settings.WindowHeight.Value;
+            _hasWindowPlacement = _windowWidth > 0 && _windowHeight > 0;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.WindowState) &&
+            Enum.TryParse(settings.WindowState, out WindowState state))
+        {
+            _windowState = state == WindowState.Minimized ? WindowState.Normal : state;
+        }
+    }
+
+    private bool HasValidWindowPlacement()
+    {
+        return _hasWindowPlacement
+            && IsFinite(_windowLeft)
+            && IsFinite(_windowTop)
+            && _windowWidth > 0
+            && _windowHeight > 0;
+    }
+
+    private static bool IsFinite(double value) => !(double.IsNaN(value) || double.IsInfinity(value));
 
 
     private static long? NormalizeSeedForSwarmUi(string? seedText)
@@ -659,6 +812,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         // Fire off multiple generations grouped into a single batch.
         // "Randomized prompts" here means: regenerate the PromptLoom prompt using a fresh seed each time.
+        if (BatchQty <= 0)
+            return;
+
         var imageSeed = SendSwarmSeed ? NormalizeSeedForSwarmUi(ImageSeedText) : null;
         var batch = CreateBatchForRun(title: $"Batch ×{BatchQty}", promptSnapshot: PromptText, seed: imageSeed);
         _dispatcher.Invoke(() => AddRecentBatch(batch));
@@ -913,7 +1069,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
         finally
         {
-            IsSwarmGenerating = false;
+            UpdateGenerationStatus();
         }
     }
 
@@ -991,6 +1147,160 @@ public sealed class MainViewModel : INotifyPropertyChanged
         RecentBatches.Insert(0, batch);
         while (RecentBatches.Count > 12)
             RecentBatches.RemoveAt(RecentBatches.Count - 1);
+    }
+
+    private void OnRecentBatchesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is not null)
+        {
+            foreach (RecentSwarmBatchViewModel batch in e.NewItems)
+            {
+                AttachBatch(batch);
+            }
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (RecentSwarmBatchViewModel batch in e.OldItems)
+            {
+                DetachBatch(batch);
+            }
+        }
+
+        UpdateGenerationStatus();
+    }
+
+    private void AttachBatch(RecentSwarmBatchViewModel batch)
+    {
+        batch.Items.CollectionChanged += OnBatchItemsChanged;
+        foreach (var item in batch.Items)
+        {
+            item.PropertyChanged += OnRecentItemPropertyChanged;
+        }
+    }
+
+    private void DetachBatch(RecentSwarmBatchViewModel batch)
+    {
+        batch.Items.CollectionChanged -= OnBatchItemsChanged;
+        foreach (var item in batch.Items)
+        {
+            item.PropertyChanged -= OnRecentItemPropertyChanged;
+        }
+    }
+
+    private void OnBatchItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is not null)
+        {
+            foreach (RecentSwarmImageViewModel item in e.NewItems)
+            {
+                item.PropertyChanged += OnRecentItemPropertyChanged;
+            }
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (RecentSwarmImageViewModel item in e.OldItems)
+            {
+                item.PropertyChanged -= OnRecentItemPropertyChanged;
+            }
+        }
+
+        UpdateGenerationStatus();
+    }
+
+    private void OnRecentItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        => UpdateGenerationStatus();
+
+    private void UpdateGenerationStatus()
+    {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(UpdateGenerationStatus);
+            return;
+        }
+
+        var activeImages = 0;
+        var activeBatches = 0;
+
+        foreach (var batch in RecentBatches)
+        {
+            var batchActive = false;
+            foreach (var item in batch.Items)
+            {
+                if (!item.IsGenerating)
+                    continue;
+
+                activeImages++;
+                batchActive = true;
+            }
+
+            if (batchActive)
+                activeBatches++;
+        }
+
+        IsSwarmGenerating = activeImages > 0;
+        SwarmGenerationStatus = activeImages > 0
+            ? $"{activeImages} image{(activeImages == 1 ? "" : "s")} in {activeBatches} batch{(activeBatches == 1 ? "" : "es")} queued."
+            : "No images queued.";
+    }
+
+    private void OnSearchViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SearchViewModel.IndexStatusMessage) ||
+            e.PropertyName == nameof(SearchViewModel.HasIndexStatusMessage) ||
+            e.PropertyName == nameof(SearchViewModel.State))
+        {
+            UpdateIndexStatusSummary();
+        }
+
+        if (e.PropertyName == nameof(SearchViewModel.ErrorMessage) ||
+            e.PropertyName == nameof(SearchViewModel.State))
+        {
+            UpdateErrorStatusSummary();
+        }
+    }
+
+    private void UpdateIndexStatusSummary()
+    {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(UpdateIndexStatusSummary);
+            return;
+        }
+
+        if (SearchViewModel.HasIndexStatusMessage)
+        {
+            IndexStatusSummary = SearchViewModel.IndexStatusMessage;
+            return;
+        }
+
+        IndexStatusSummary = SearchViewModel.State switch
+        {
+            SearchState.EmptyIndex => "No files found in Library.",
+            SearchState.NoResults => "No files match the selected tags.",
+            SearchState.Error => "Index error.",
+            _ => "Ready."
+        };
+    }
+
+    private void UpdateErrorStatusSummary()
+    {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(UpdateErrorStatusSummary);
+            return;
+        }
+
+        if (SearchViewModel.State == SearchState.Error && !string.IsNullOrWhiteSpace(SearchViewModel.ErrorMessage))
+        {
+            ErrorStatusSummary = SearchViewModel.ErrorMessage;
+            return;
+        }
+
+        ErrorStatusSummary = string.IsNullOrWhiteSpace(SystemMessages)
+            ? "None."
+            : SystemMessages;
     }
 
 private static async Task<ImageSource?> TryDownloadSwarmImageAsync(Uri baseUri, string imageRef, CancellationToken ct)

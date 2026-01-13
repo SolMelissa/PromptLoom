@@ -1,7 +1,7 @@
 // CHANGE LOG
+// - 2026-03-12 | Request: Restore window position | Persist window bounds and state in user settings.
 // - 2026-03-02 | Request: Batch qty slider | Default batch quantity to 2.
 // - 2025-12-31 | Request: Persist SwarmUI toggles | Store send-seed toggle and SwarmUI selections.
-// - 2025-12-25 | Fix: User settings store seam | Add IUserSettingsStore and a default implementation.
 // FIX: Introduce user settings store seam to allow in-memory testing.
 // CAUSE: MainViewModel read/wrote user_settings.json directly.
 // CHANGE: Add IUserSettingsStore and a default implementation. 2025-12-25
@@ -90,4 +90,10 @@ public sealed class UserSettings
 
     public int BatchQty { get; set; } = 2;
     public bool BatchRandomizePrompts { get; set; }
+
+    public double? WindowLeft { get; set; }
+    public double? WindowTop { get; set; }
+    public double? WindowWidth { get; set; }
+    public double? WindowHeight { get; set; }
+    public string? WindowState { get; set; }
 }
